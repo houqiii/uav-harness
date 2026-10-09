@@ -13,7 +13,7 @@ bash scripts/mac-bench.sh
 # 连接后输入：status、motor、probe、quit
 ```
 
-脚本自动安装依赖、选择唯一 USB 串口，显示实时遥测、发送参数和 ACK。首次连接不会自动转电机；输入 `motor` 才执行 1231 µs、5 秒单电机测试。完整说明见 [Mac 模型机终端](docs/mac-bench.md)。无硬件试运行加 `--mock`。
+脚本自动安装依赖、选择唯一 USB 串口。独立 `uav>` 输入行支持编辑和历史命令，底部状态栏显示实时遥测；发送参数和 ACK 显示在输入行上方。首次连接不会自动转电机；输入 `motor` 才执行 1231 µs、5 秒单电机测试。完整说明见 [Mac 模型机终端](docs/mac-bench.md)。无硬件试运行加 `--mock`。
 
 ```bash
 python3 -m venv .venv

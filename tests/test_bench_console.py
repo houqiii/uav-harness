@@ -10,6 +10,82 @@ from uav_harness.bench_console import BenchConsole, choose_port, telemetry_line
 from uav_harness.errors import HarnessError
 
 
+async def test_terminal_preserves_partial_command_during_telemetry_and_history(tmp_path):
+    from uav_harness import bench_console
+    assert hasattr(bench_console, "TerminalUI"), "Raw stdin/print cannot preserve an editable input line"
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+
+    async def until(predicate):
+        async with asyncio.timeout(3):
+            while not predicate():
+                await asyncio.sleep(.01)
+
+    with create_pipe_input() as pipe:
+        ui = bench_console.TerminalUI(tmp_path, input=pipe, output=DummyOutput())
+        pending = asyncio.create_task(ui.prompt())
+        try:
+            await until(lambda: ui.session.app.is_running)
+            pipe.send_text("mot")
+            await until(lambda: ui.session.default_buffer.text == "mot")
+            for i in range(5):
+                ui.update_telemetry(f"[RX {i}] armed=False | PWM=1051")
+                await asyncio.sleep(.03)
+                assert ui.session.default_buffer.text == "mot"
+            # Backspace continues to edit the same command after multiple refreshes.
+            pipe.send_text("or\x7fr\r")
+            assert await asyncio.wait_for(pending, 3) == "motor"
+            pending = asyncio.create_task(ui.prompt())
+            await until(lambda: ui.session.app.is_running)
+            pipe.send_text("\x1b[A\r")
+            assert await asyncio.wait_for(pending, 3) == "motor"
+        finally:
+            pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+
+
+async def test_terminal_accepts_status_while_motor_runs_without_rx_log_flood(harness, tmp_path):
+    from prompt_toolkit.input import create_pipe_input
+    from prompt_toolkit.output import DummyOutput
+    from uav_harness.bench_console import TerminalUI, interactive_commands
+
+    async def until(predicate):
+        async with asyncio.timeout(3):
+            while not predicate():
+                await asyncio.sleep(.01)
+
+    output = []
+    with create_pipe_input() as pipe:
+        ui = TerminalUI(tmp_path, input=pipe, output=DummyOutput())
+        console = BenchConsole(harness, output.append, ui.update_telemetry)
+        reader = asyncio.create_task(interactive_commands(console, ui))
+        telemetry = asyncio.create_task(console.telemetry())
+        try:
+            await until(lambda: ui.session.app.is_running)
+            pipe.send_text("motor\r")
+            await until(lambda: any("[ACK] command=209" in line for line in output))
+            pipe.send_text("sta")
+            await until(lambda: ui.session.default_buffer.text == "sta")
+            await until(lambda: "PWM=1231" in ui.latest)
+            assert ui.session.default_buffer.text == "sta"
+            assert ui.busy
+            assert not any(line.startswith("[RX") for line in output)
+            pipe.send_text("tus\r")
+            await until(lambda: any('"vehicle_id": "model-1"' in line for line in output))
+            pipe.send_text("motor 2\r")
+            await until(lambda: any("[BUSY]" in line for line in output))
+            assert sum(c["command"] == 209 for c in harness.simulators["model-1"].commands) == 1
+            pipe.send_text("quit\r")
+            await asyncio.wait_for(reader, 3)
+            # Terminating the editor leaves the runtime to perform controller-timed cleanup.
+            await harness.close()
+            assert not harness.simulators["model-1"].armed
+        finally:
+            reader.cancel()
+            telemetry.cancel()
+            await asyncio.gather(reader, telemetry, return_exceptions=True)
+
+
 def test_ambiguous_serial_devices_require_explicit_selection(monkeypatch):
     from types import SimpleNamespace
     from uav_harness import bench_console
@@ -127,3 +203,64 @@ except KeyboardInterrupt:
     assert not latest["HEARTBEAT"].base_mode & 128
     assert latest["EXTENDED_SYS_STATE"].landed_state == 1
     assert latest["SERVO_OUTPUT_RAW"].servo1_raw == 1051
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Real terminal key handling")
+async def test_terminal_ctrl_c_key_during_motor_finishes_cleanup(tmp_path):
+    import pty
+    import subprocess
+
+    master, slave = pty.openpty()
+    os.set_blocking(master, False)
+    code = """import argparse, asyncio, sys
+from uav_harness.bench_console import run_console, settings_for
+args = argparse.Namespace(mock=True, observe=False, system_id=1, component_id=1, board_id=1010)
+try:
+    asyncio.run(run_console(settings_for(args, sys.argv[1])))
+except KeyboardInterrupt:
+    pass
+"""
+    process = subprocess.Popen([sys.executable, "-c", code, str(tmp_path)],
+        stdin=slave, stdout=slave, stderr=slave,
+        env=dict(os.environ, TERM="xterm-256color", PROMPT_TOOLKIT_NO_CPR="1"))
+    os.close(slave)
+    output = bytearray()
+
+    async def until(predicate):
+        async with asyncio.timeout(15):
+            while not predicate():
+                try:
+                    output.extend(os.read(master, 65536))
+                except BlockingIOError:
+                    pass
+                except OSError:
+                    if process.poll() is None:
+                        raise
+                await asyncio.sleep(.01)
+
+    try:
+        await until(lambda: b"uav>" in output)
+        os.write(master, b"motor\r")
+        await until(lambda: b"[ACK] command=209" in output)
+        # Send a terminal key, not an OS signal, to exercise prompt_toolkit cancellation.
+        os.write(master, b"\x03")
+        await until(lambda: process.poll() is not None)
+        assert process.returncode == 0, output.decode(errors="replace")
+        assert "等待已有任务收尾".encode() in output
+        assert b"Traceback" not in output
+        from pymavlink import mavutil
+        log = mavutil.mavlink_connection(str(next(tmp_path.glob("*.tlog"))))
+        latest = {}
+        try:
+            while (msg := log.recv_match()) is not None:
+                latest[msg.get_type()] = msg
+        finally:
+            log.close()
+        assert not latest["HEARTBEAT"].base_mode & 128
+        assert latest["EXTENDED_SYS_STATE"].landed_state == 1
+        assert latest["SERVO_OUTPUT_RAW"].servo1_raw == 1051
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        os.close(master)

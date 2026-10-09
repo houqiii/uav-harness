@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import nullcontext
 import json
 import math
 import os
@@ -14,6 +15,9 @@ import time
 import uuid
 
 from serial.tools import list_ports
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.patch_stdout import patch_stdout
 
 from .config import Settings
 from .contracts import Plan
@@ -165,9 +169,31 @@ async def stdin_lines():
         loop.remove_reader(fd)
 
 
+class TerminalUI:
+    """An editable prompt and live status area; telemetry never writes into the input line."""
+    def __init__(self, state_dir, *, input=None, output=None):
+        Path(state_dir).mkdir(parents=True, exist_ok=True)
+        self.latest = "等待遥测…"
+        self.busy = False
+        self.session = PromptSession(
+            history=FileHistory(str(Path(state_dir) / "console-history.txt")),
+            bottom_toolbar=lambda: self.latest.replace(" | ", "\n"),
+            refresh_interval=.25, enable_history_search=True, input=input, output=output,
+        )
+
+    def update_telemetry(self, line):
+        self.latest = line
+        self.session.app.invalidate()
+
+    async def prompt(self):
+        return (await self.session.prompt_async(
+            lambda: "uav (执行中)> " if self.busy else "uav> ")).strip()
+
+
 class BenchConsole:
-    def __init__(self, harness, output=print):
+    def __init__(self, harness, output=print, telemetry_output=None):
         self.harness, self.output = harness, output
+        self.telemetry_output = telemetry_output
         self.session = harness.sessions["model-1"]
         self.watching = True
         for link in harness.transports.values():
@@ -190,7 +216,7 @@ class BenchConsole:
     async def telemetry(self):
         while True:
             if self.watching:
-                self.output(telemetry_line(self.session))
+                (self.telemetry_output or self.output)(telemetry_line(self.session))
             await asyncio.sleep(1)
 
     async def execute(self, line):
@@ -202,6 +228,8 @@ class BenchConsole:
         elif line in ("watch", "quiet"):
             self.watching = line == "watch"
             self.output("遥测显示已开启" if self.watching else "遥测显示已暂停；仍在接收和记录")
+            if not self.watching and self.telemetry_output:
+                self.telemetry_output("遥测显示已暂停；输入 watch 恢复")
         elif line in ("help", "?"):
             self.output(HELP)
         elif line:
@@ -220,9 +248,52 @@ class BenchConsole:
         return True
 
 
+async def interactive_commands(console, ui):
+    """Keep the prompt alive during actions; only one control action can run at a time."""
+    active = None
+    immediate = {"status", "watch", "quiet", "help", "?", "quit", "exit", "q", ""}
+
+    async def action(line):
+        ui.busy = True
+        ui.session.app.invalidate()
+        try:
+            await console.execute(line)
+        finally:
+            ui.busy = False
+            ui.session.app.invalidate()
+
+    try:
+        while True:
+            try:
+                line = await ui.prompt()
+            except EOFError:
+                break
+            if line in immediate:
+                if not await console.execute(line):
+                    break
+            elif active and not active.done():
+                console.output("[BUSY] 动作执行中；可输入 status/quiet/watch，或 quit 等待收尾退出。")
+            else:
+                if active:
+                    await active
+                active = asyncio.create_task(action(line))
+    finally:
+        if active:
+            active.cancel()
+            await asyncio.gather(active, return_exceptions=True)
+
+
 async def run_console(settings):
+    ui = TerminalUI(settings.state_dir) if sys.stdin.isatty() and sys.stdout.isatty() else None
+    # All background TX/ACK/STATUSTEXT output is printed above and redraws the current edit.
+    with patch_stdout() if ui else nullcontext():
+        await _run_console(settings, ui)
+
+
+async def _run_console(settings, ui):
     harness = Harness(settings)
-    console = BenchConsole(harness, output=lambda line: print(line, flush=True))
+    console = BenchConsole(harness, output=lambda line: print(line, flush=True),
+                           telemetry_output=ui.update_telemetry if ui else None)
     task = None
     try:
         print("连接：" + str(settings.links[0].device or "协议模拟对端"), flush=True)
@@ -231,9 +302,12 @@ async def run_console(settings):
         print(f"遥测与任务记录：{settings.state_dir.resolve()}", flush=True)
         print(HELP, flush=True)
         task = asyncio.create_task(console.telemetry())
-        async for line in stdin_lines():
-            if not await console.execute(line):
-                break
+        if ui:
+            await interactive_commands(console, ui)
+        else:
+            async for line in stdin_lines():
+                if not await console.execute(line):
+                    break
     finally:
         print("正在关闭连接，等待已有任务收尾…", flush=True)
         # Keep receiving and displaying telemetry until controller-timed cleanup ends.
