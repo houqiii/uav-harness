@@ -1,0 +1,14 @@
+{
+  "kind": "protocol_test_double_cli",
+  "date": "2026-10-09",
+  "actual_firmware_sitl": false,
+  "status": "succeeded",
+  "actions": {
+    "ap-land": "succeeded",
+    "ap-move": "succeeded",
+    "ap-takeoff": "succeeded",
+    "px4-land": "succeeded",
+    "px4-move": "succeeded",
+    "px4-takeoff": "succeeded"
+  }
+}

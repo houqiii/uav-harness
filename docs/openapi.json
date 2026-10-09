@@ -1,0 +1,1009 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "UAV Harness",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/vehicles": {
+      "get": {
+        "summary": "Vehicles",
+        "operationId": "vehicles_v1_vehicles_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/actions": {
+      "post": {
+        "summary": "Action",
+        "operationId": "action_v1_actions_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Arm"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Disarm"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Takeoff"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Move"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Hold"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Land"
+                  },
+                  {
+                    "$ref": "#/components/schemas/MotorTest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TakeoffProbe"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "action",
+                  "mapping": {
+                    "vehicle.arm": "#/components/schemas/Arm",
+                    "vehicle.disarm": "#/components/schemas/Disarm",
+                    "flight.takeoff": "#/components/schemas/Takeoff",
+                    "flight.move_relative": "#/components/schemas/Move",
+                    "flight.hold": "#/components/schemas/Hold",
+                    "flight.land": "#/components/schemas/Land",
+                    "bench.motor_test": "#/components/schemas/MotorTest",
+                    "bench.takeoff_probe": "#/components/schemas/TakeoffProbe"
+                  }
+                },
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plans": {
+      "post": {
+        "summary": "Plan",
+        "operationId": "plan_v1_plans_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Plan"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{job_id}": {
+      "get": {
+        "summary": "Job",
+        "operationId": "job_v1_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{job_id}/cancel": {
+      "post": {
+        "summary": "Cancel",
+        "operationId": "cancel_v1_jobs__job_id__cancel_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/jobs/{job_id}/reconcile": {
+      "post": {
+        "summary": "Reconcile",
+        "operationId": "reconcile_v1_jobs__job_id__reconcile_post",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intents": {
+      "post": {
+        "summary": "Intent",
+        "operationId": "intent_v1_intents_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Intent"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Arm": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "vehicle.arm",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Empty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action"
+        ],
+        "title": "Arm"
+      },
+      "Disarm": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "vehicle.disarm",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Empty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action"
+        ],
+        "title": "Disarm"
+      },
+      "Empty": {
+        "properties": {},
+        "additionalProperties": false,
+        "type": "object",
+        "title": "Empty"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Hold": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "flight.hold",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/HoldParams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action",
+          "params"
+        ],
+        "title": "Hold"
+      },
+      "HoldParams": {
+        "properties": {
+          "duration_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Duration S"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "duration_s"
+        ],
+        "title": "HoldParams"
+      },
+      "Intent": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "execute": {
+            "type": "boolean",
+            "title": "Execute",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "Intent"
+      },
+      "Land": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "flight.land",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/Empty"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action"
+        ],
+        "title": "Land"
+      },
+      "MotorParams": {
+        "properties": {
+          "motor_sequence": {
+            "type": "integer",
+            "maximum": 8.0,
+            "minimum": 1.0,
+            "title": "Motor Sequence",
+            "default": 1
+          },
+          "pwm_us": {
+            "type": "integer",
+            "maximum": 1300.0,
+            "minimum": 1000.0,
+            "title": "Pwm Us",
+            "default": 1231
+          },
+          "duration_s": {
+            "type": "number",
+            "maximum": 5.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Duration S",
+            "default": 5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "MotorParams"
+      },
+      "MotorTest": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "bench.motor_test",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/MotorParams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action"
+        ],
+        "title": "MotorTest"
+      },
+      "Move": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "flight.move_relative",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/MoveParams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action",
+          "params"
+        ],
+        "title": "Move"
+      },
+      "MoveParams": {
+        "properties": {
+          "frame": {
+            "type": "string",
+            "enum": [
+              "local_enu",
+              "body_flu"
+            ],
+            "title": "Frame",
+            "default": "local_enu"
+          },
+          "x_m": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": -100.0,
+            "title": "X M"
+          },
+          "y_m": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": -100.0,
+            "title": "Y M"
+          },
+          "z_m": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": -100.0,
+            "title": "Z M"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "x_m",
+          "y_m",
+          "z_m"
+        ],
+        "title": "MoveParams"
+      },
+      "Plan": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 10000,
+            "title": "Query",
+            "default": ""
+          },
+          "actions": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Arm"
+                },
+                {
+                  "$ref": "#/components/schemas/Disarm"
+                },
+                {
+                  "$ref": "#/components/schemas/Takeoff"
+                },
+                {
+                  "$ref": "#/components/schemas/Move"
+                },
+                {
+                  "$ref": "#/components/schemas/Hold"
+                },
+                {
+                  "$ref": "#/components/schemas/Land"
+                },
+                {
+                  "$ref": "#/components/schemas/MotorTest"
+                },
+                {
+                  "$ref": "#/components/schemas/TakeoffProbe"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "action",
+                "mapping": {
+                  "bench.motor_test": "#/components/schemas/MotorTest",
+                  "bench.takeoff_probe": "#/components/schemas/TakeoffProbe",
+                  "flight.hold": "#/components/schemas/Hold",
+                  "flight.land": "#/components/schemas/Land",
+                  "flight.move_relative": "#/components/schemas/Move",
+                  "flight.takeoff": "#/components/schemas/Takeoff",
+                  "vehicle.arm": "#/components/schemas/Arm",
+                  "vehicle.disarm": "#/components/schemas/Disarm"
+                }
+              }
+            },
+            "type": "array",
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Actions"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "actions"
+        ],
+        "title": "Plan"
+      },
+      "ProbeParams": {
+        "properties": {
+          "altitude_home_m": {
+            "type": "number",
+            "maximum": 2.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Altitude Home M",
+            "default": 1.5
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ProbeParams"
+      },
+      "Takeoff": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "flight.takeoff",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/TakeoffParams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action",
+          "params"
+        ],
+        "title": "Takeoff"
+      },
+      "TakeoffParams": {
+        "properties": {
+          "altitude_home_m": {
+            "type": "number",
+            "maximum": 100.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Altitude Home M"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "altitude_home_m"
+        ],
+        "title": "TakeoffParams"
+      },
+      "TakeoffProbe": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "bench.takeoff_probe",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/ProbeParams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action"
+        ],
+        "title": "TakeoffProbe"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

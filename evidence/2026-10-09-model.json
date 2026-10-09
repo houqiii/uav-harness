@@ -1,0 +1,360 @@
+{
+  "kind": "curated_prior_model_evidence",
+  "date": "2026-10-09",
+  "firmware": "ArduCopter 4.5.0",
+  "board_id": 1010,
+  "notes": [
+    "Raw local logs are not shipped.",
+    "Physical observations are user reports, separately attributed.",
+    "No altitude or position-flight completion is asserted."
+  ],
+  "records": [
+    {
+      "source_record": "model-vertical-20261009-171455/result.json",
+      "sha256": "6643d83bb41cb96d05744fc2384b976939962c4e378ab684b4d0e9fa4bf1d3f7",
+      "started_at": "2026-10-09T17:14:55.765911+08:00",
+      "commands": [
+        {
+          "label": "alt_hold_mode",
+          "command": 176,
+          "params": [
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "normal_arm_alt_hold",
+          "command": 400,
+          "params": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "takeoff_param3_0_requires_navigation",
+          "command": 22,
+          "params": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1.5
+          ],
+          "result": "MAV_RESULT_FAILED"
+        },
+        {
+          "label": "takeoff_param3_1_vertical",
+          "command": 22,
+          "params": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1.5
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "land_after_vertical_probe",
+          "command": 176,
+          "params": [
+            1,
+            9,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "normal_disarm",
+          "command": 400,
+          "params": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_FAILED"
+        }
+      ],
+      "physical_observation": null,
+      "final_heartbeat": {
+        "fields": {
+          "mavpackettype": "HEARTBEAT",
+          "type": 14,
+          "autopilot": 3,
+          "base_mode": 209,
+          "custom_mode": 9,
+          "system_status": 5,
+          "mavlink_version": 3
+        },
+        "age_s": 0.283
+      },
+      "final_landed": {
+        "fields": {
+          "mavpackettype": "EXTENDED_SYS_STATE",
+          "vtol_state": 3,
+          "landed_state": 4
+        },
+        "age_s": 0.281
+      }
+    },
+    {
+      "source_record": "model-single-motor-20261009-01/result.json",
+      "sha256": "e81e400efa3369bd6e2f5c6f239baeed63dd4f89a7f358d418d45cba4edc723f",
+      "started_at": "2026-10-09T17:23:55.942652+08:00",
+      "commands": [
+        {
+          "label": "motor_test_sequence1_pwm1231_5seconds",
+          "command": 209,
+          "params": [
+            1,
+            1,
+            1231,
+            5,
+            1,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        }
+      ],
+      "physical_observation": null,
+      "final_heartbeat": {
+        "fields": {
+          "mavpackettype": "HEARTBEAT",
+          "type": 14,
+          "autopilot": 3,
+          "base_mode": 81,
+          "custom_mode": 0,
+          "system_status": 5,
+          "mavlink_version": 3
+        },
+        "age_s": 0.591
+      },
+      "final_landed": {
+        "fields": {
+          "mavpackettype": "EXTENDED_SYS_STATE",
+          "vtol_state": 3,
+          "landed_state": 1
+        },
+        "age_s": 0.588
+      }
+    },
+    {
+      "source_record": "model-powered-retest-20261009-191056/single-motor/result.json",
+      "sha256": "e5bfc8c77b5d0e7eb0db5fee5af31cd3f45efe8182508080f12e3ae7a9bf350e",
+      "started_at": "2026-10-09T19:11:29.185760+08:00",
+      "commands": [
+        {
+          "label": "firmware_identity",
+          "command": 512,
+          "params": [
+            148,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "same_motor_test_sequence1_pwm1231_5seconds",
+          "command": 209,
+          "params": [
+            1,
+            1,
+            1231,
+            5,
+            1,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        }
+      ],
+      "physical_observation": {
+        "source": "user_observation_in_chat",
+        "regulated_power_connected": true,
+        "motor_rotation_observed": true,
+        "user_answer": "电机转动了",
+        "scope": "single motor test only; not takeoff altitude completion"
+      },
+      "final_heartbeat": {
+        "fields": {
+          "mavpackettype": "HEARTBEAT",
+          "type": 14,
+          "autopilot": 3,
+          "base_mode": 81,
+          "custom_mode": 0,
+          "system_status": 3,
+          "mavlink_version": 3
+        },
+        "age_s": 0.915
+      },
+      "final_landed": {
+        "fields": {
+          "mavpackettype": "EXTENDED_SYS_STATE",
+          "vtol_state": 3,
+          "landed_state": 1
+        },
+        "age_s": 0.915
+      }
+    },
+    {
+      "source_record": "model-vertical-20261009-191235/result.json",
+      "sha256": "d36e0736deabdde6f03267aa7f743c45d5cf2e1c7d7455ea75beac0c484c4cf9",
+      "started_at": "2026-10-09T19:12:35.695229+08:00",
+      "commands": [
+        {
+          "label": "alt_hold_mode",
+          "command": 176,
+          "params": [
+            1,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "normal_arm_alt_hold",
+          "command": 400,
+          "params": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "takeoff_param3_0_requires_navigation",
+          "command": 22,
+          "params": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            1.5
+          ],
+          "result": "MAV_RESULT_FAILED"
+        },
+        {
+          "label": "takeoff_param3_1_vertical",
+          "command": 22,
+          "params": [
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            1.5
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "land_after_vertical_probe",
+          "command": 176,
+          "params": [
+            1,
+            9,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "normal_disarm_on_ground",
+          "command": 400,
+          "params": [
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        },
+        {
+          "label": "restore_initial_mode",
+          "command": 176,
+          "params": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "result": "MAV_RESULT_ACCEPTED"
+        }
+      ],
+      "physical_observation": {
+        "source": "user_observation_in_chat",
+        "user_answer": "多台电机转动或转速提高了",
+        "multiple_motor_response_observed": true,
+        "altitude_reached": "not_confirmed; model cannot fly"
+      },
+      "final_heartbeat": {
+        "fields": {
+          "mavpackettype": "HEARTBEAT",
+          "type": 14,
+          "autopilot": 3,
+          "base_mode": 81,
+          "custom_mode": 0,
+          "system_status": 3,
+          "mavlink_version": 3
+        },
+        "age_s": 0.791
+      },
+      "final_landed": {
+        "fields": {
+          "mavpackettype": "EXTENDED_SYS_STATE",
+          "vtol_state": 3,
+          "landed_state": 1
+        },
+        "age_s": 0.791
+      }
+    }
+  ]
+}

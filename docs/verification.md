@@ -1,0 +1,16 @@
+# 验证边界
+
+## 已验证
+
+- 原现场模型机：普通解锁、AltHold 垂直起飞命令接受、电机响应、Land/地面/解除武装和模式恢复；物理响应由用户现场观察确认。
+- 新项目真实串口 HTTP API：停用 MAVProxy，由 Harness 独占串口，提交 `bench.motor_test`（1231 µs，5 秒），任务成功且接收到输出响应；结束确认未解锁、在地面。QGC 不在控制或遥测判定链路中。此次没有收集新的现场转动观察，见 `evidence/direct-serial-api.json`。
+- 本项目软件：真实 MAVLink 编解码的异构 ArduPilot/PX4 协议对端、Offboard 预发送、Home 高度基准、坐标冻结、模式与 armed 效果、地面收尾、定向 ACK、遥测时效、幂等/租约/持久化和取消。
+- DeepSeek 编译及意图 API：使用模拟上游响应测试 JSON 解析、能力约束、API→调度→协议对端闭环；不把这些测试称为外部 DeepSeek 实际调用。
+
+2026-10-09 本地运行 `.venv/bin/python -m pytest -q`，37 项通过。测试只绑定随机 loopback 端口，不连接串口、QGC 默认端口或飞行器。真实串口验收是单独进行的，未放入 CI。
+
+## 尚未验证
+
+PX4 固件 SITL、PX4 实机、ArduPilot 实际位置飞行和异构多机实飞。模型机无法飞行，因此现场起飞动作只验证指令和电机响应，没有到高/前进/下降验收。外部 DeepSeek 服务需要有效凭据后单独验收。
+
+`evidence/` 保存整理后的现场结果、源记录 SHA-256 和后续项目验证摘要；完整 tlog、设备 UID、SQLite、运行目录和凭据留在本地。

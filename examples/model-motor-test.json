@@ -1,0 +1,4 @@
+{
+  "query": "模型机测试一个电机输出 1231 微秒、持续 5 秒。",
+  "actions": [{"action_id": "motor", "vehicle_id": "model-1", "action": "bench.motor_test", "params": {"motor_sequence": 1, "pwm_us": 1231, "duration_s": 5}, "timeout_s": 20}]
+}

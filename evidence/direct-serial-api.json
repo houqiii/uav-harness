@@ -1,0 +1,69 @@
+{
+  "kind": "new_project_direct_serial_http_api_physical_model",
+  "date": "2026-10-09",
+  "qgc_in_control_path": false,
+  "mavproxy_running_during_test": false,
+  "source_record_sha256": "9b35d6dadadad2e12434517915ebaedc470d68aac4a298261cb9de29dba1ecbd",
+  "action": {
+    "action_id": "motor",
+    "vehicle_id": "model-1",
+    "action": "bench.motor_test",
+    "params": {
+      "motor_sequence": 1,
+      "pwm_us": 1231,
+      "duration_s": 5
+    },
+    "timeout_s": 20
+  },
+  "job_status": "succeeded",
+  "completion_scope": "bench_output_telemetry",
+  "physical_rotation_verified": false,
+  "notes": [
+    "No new user RPM observation was collected for this project API test.",
+    "Prior same-PWM motor rotation was observed by the user after regulated power was connected."
+  ],
+  "final_heartbeat": {
+    "mavpackettype": "HEARTBEAT",
+    "type": 14,
+    "autopilot": 3,
+    "base_mode": 81,
+    "custom_mode": 0,
+    "system_status": 3,
+    "mavlink_version": 3
+  },
+  "final_landed": {
+    "mavpackettype": "EXTENDED_SYS_STATE",
+    "vtol_state": 3,
+    "landed_state": 1
+  },
+  "protocol_events": [
+    {
+      "kind": "command_sent",
+      "command": 209,
+      "params": [
+        1,
+        1,
+        1231,
+        5.0,
+        1,
+        0,
+        0
+      ],
+      "message": null
+    },
+    {
+      "kind": "command_ack",
+      "command": null,
+      "params": null,
+      "message": {
+        "command": 209,
+        "mavpackettype": "COMMAND_ACK",
+        "progress": 0,
+        "result": 0,
+        "result_param2": 0,
+        "target_component": 191,
+        "target_system": 245
+      }
+    }
+  ]
+}

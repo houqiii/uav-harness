@@ -1,0 +1,14 @@
+{
+  "allow_control": true,
+  "state_dir": "state/mock",
+  "links": [
+    {"name": "ap-simulation", "kind": "simulator"},
+    {"name": "px4-simulation", "kind": "simulator"},
+    {"name": "bench-simulation", "kind": "simulator"}
+  ],
+  "vehicles": [
+    {"vehicle_id": "ap-1", "link": "ap-simulation", "backend": "ardupilot", "system_id": 1, "firmware": [4,5]},
+    {"vehicle_id": "px4-1", "link": "px4-simulation", "backend": "px4", "system_id": 2, "firmware": [1,16]},
+    {"vehicle_id": "model-1", "link": "bench-simulation", "backend": "ardupilot", "profile": "model_bench", "system_id": 3, "firmware": [4,5], "max_height_m": 2}
+  ]
+}

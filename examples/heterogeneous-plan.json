@@ -1,0 +1,11 @@
+{
+  "query": "两架飞机起飞到 Home 上方 2 米，东移 1 米，两架都完成后分别降落。",
+  "actions": [
+    {"action_id": "ap-takeoff", "vehicle_id": "ap-1", "action": "flight.takeoff", "params": {"altitude_home_m": 2}, "timeout_s": 30},
+    {"action_id": "px4-takeoff", "vehicle_id": "px4-1", "action": "flight.takeoff", "params": {"altitude_home_m": 2}, "timeout_s": 30},
+    {"action_id": "ap-move", "vehicle_id": "ap-1", "action": "flight.move_relative", "params": {"frame": "local_enu", "x_m": 1, "y_m": 0, "z_m": 0}, "depends_on": ["ap-takeoff"], "timeout_s": 30},
+    {"action_id": "px4-move", "vehicle_id": "px4-1", "action": "flight.move_relative", "params": {"frame": "local_enu", "x_m": 1, "y_m": 0, "z_m": 0}, "depends_on": ["px4-takeoff"], "timeout_s": 30},
+    {"action_id": "ap-land", "vehicle_id": "ap-1", "action": "flight.land", "params": {}, "depends_on": ["ap-move", "px4-move"], "timeout_s": 30},
+    {"action_id": "px4-land", "vehicle_id": "px4-1", "action": "flight.land", "params": {}, "depends_on": ["ap-move", "px4-move"], "timeout_s": 30}
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "query": "模型机普通解锁并测试无 GPS 垂直起飞指令，随后降落、解除武装并恢复初始模式。",
+  "actions": [{"action_id": "probe", "vehicle_id": "model-1", "action": "bench.takeoff_probe", "params": {"altitude_home_m": 1.5}, "timeout_s": 60}]
+}

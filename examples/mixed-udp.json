@@ -1,0 +1,12 @@
+{
+  "allow_control": false,
+  "state_dir": "state/mixed-udp",
+  "links": [
+    {"name": "ap-link", "kind": "udp", "bind_port": 14560},
+    {"name": "px4-link", "kind": "udp", "bind_port": 14540}
+  ],
+  "vehicles": [
+    {"vehicle_id": "ap-1", "link": "ap-link", "backend": "ardupilot", "profile": "flight", "system_id": 1, "firmware": [4,5]},
+    {"vehicle_id": "px4-1", "link": "px4-link", "backend": "px4", "profile": "flight", "system_id": 2, "firmware": [1,16]}
+  ]
+}
