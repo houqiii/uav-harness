@@ -10,7 +10,7 @@ cd uav-harness
 bash scripts/mac-bench.sh
 ```
 
-已有仓库先 `git pull --ff-only`，再执行脚本。首次运行会创建 `.venv` 并安装锁定依赖；需要 Python 3.11+，建议使用 3.12。没有 Python 时，先 `brew install python@3.12`（需已安装 Homebrew）。如果该 Python 未在 PATH 中，可执行 `PYTHON_BIN="$(brew --prefix python@3.12)/bin/python3.12" bash scripts/mac-bench.sh`。
+已有仓库先 `git pull --ff-only`，再执行脚本。首次运行会创建 `.venv` 并安装锁定依赖。脚本需要 Python 3.11+，优先查找已有 Python（包括 Homebrew 常用路径和 uv 管理的 3.12）；找不到时，如果已有 uv 或 Homebrew，会安装 Python 3.12。两者都没有时需先安装 Python 3.12。也可用 `PYTHON_BIN=/实际路径/python3.12 bash scripts/mac-bench.sh` 指定解释器。
 
 只有一个 USB 串口时自动选择；有多个时列出设备，使用实际路径指定：
 
