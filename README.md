@@ -6,6 +6,15 @@
 
 ## 快速运行
 
+另一台 Mac 插上已调通的模型机后，可直接运行交互终端：
+
+```bash
+bash scripts/mac-bench.sh
+# 连接后输入：status、motor、probe、quit
+```
+
+脚本自动安装依赖、选择唯一 USB 串口，显示实时遥测、发送参数和 ACK。首次连接不会自动转电机；输入 `motor` 才执行 1231 µs、5 秒单电机测试。完整说明见 [Mac 模型机终端](docs/mac-bench.md)。无硬件试运行加 `--mock`。
+
 ```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.lock

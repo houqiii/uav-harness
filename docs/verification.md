@@ -7,7 +7,7 @@
 - 本项目软件：真实 MAVLink 编解码的异构 ArduPilot/PX4 协议对端、Offboard 预发送、Home 高度基准、坐标冻结、模式与 armed 效果、地面收尾、定向 ACK、遥测时效、幂等/租约/持久化和取消。
 - DeepSeek 编译及意图 API：使用模拟上游响应测试 JSON 解析、能力约束、API→调度→协议对端闭环；不把这些测试称为外部 DeepSeek 实际调用。
 
-2026-10-09 本地运行 `.venv/bin/python -m pytest -q`，37 项通过。测试只绑定随机 loopback 端口，不连接串口、QGC 默认端口或飞行器。真实串口验收是单独进行的，未放入 CI。
+2026-10-09 本地运行 `.venv/bin/python -m pytest -q`，42 项通过。新增 Mac 交互终端测试覆盖串口选择歧义、非法/只读动作拒绝、过期遥测显示、连续输入电机/探针动作，以及 Ctrl+C 后的电机停止/地面/未解锁原始报文。`bash scripts/mac-bench.sh --mock` 也完成了安装启动和交互动作验证。测试只绑定随机 loopback 端口，不连接串口、QGC 默认端口或飞行器。真实串口验收是单独进行的，未放入 CI；新增终端入口尚未在另一台 Mac 接实机复测。
 
 ## 尚未验证
 
