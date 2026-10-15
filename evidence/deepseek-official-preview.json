@@ -1,0 +1,96 @@
+{
+  "success": true,
+  "provider": "https://api.deepseek.com",
+  "model": "deepseek-v4-pro",
+  "reasoning_effort": "low",
+  "elapsed_s": 20.99,
+  "plan": {
+    "query": "ap-1 起飞2米，向机头前进3米，再后退1米，悬停2秒后降落。",
+    "actions": [
+      {
+        "action_id": "arm1",
+        "vehicle_id": "ap-1",
+        "depends_on": [],
+        "timeout_s": 60,
+        "action": "vehicle.arm",
+        "params": {}
+      },
+      {
+        "action_id": "takeoff1",
+        "vehicle_id": "ap-1",
+        "depends_on": [
+          "arm1"
+        ],
+        "timeout_s": 60,
+        "action": "flight.takeoff",
+        "params": {
+          "altitude_home_m": 2.0
+        }
+      },
+      {
+        "action_id": "forward1",
+        "vehicle_id": "ap-1",
+        "depends_on": [
+          "takeoff1"
+        ],
+        "timeout_s": 60,
+        "action": "flight.move_relative",
+        "params": {
+          "frame": "body_flu",
+          "x_m": 3.0,
+          "y_m": 0.0,
+          "z_m": 0.0
+        }
+      },
+      {
+        "action_id": "backward1",
+        "vehicle_id": "ap-1",
+        "depends_on": [
+          "forward1"
+        ],
+        "timeout_s": 60,
+        "action": "flight.move_relative",
+        "params": {
+          "frame": "body_flu",
+          "x_m": -1.0,
+          "y_m": 0.0,
+          "z_m": 0.0
+        }
+      },
+      {
+        "action_id": "hold1",
+        "vehicle_id": "ap-1",
+        "depends_on": [
+          "backward1"
+        ],
+        "timeout_s": 60,
+        "action": "flight.hold",
+        "params": {
+          "duration_s": 2.0
+        }
+      },
+      {
+        "action_id": "land1",
+        "vehicle_id": "ap-1",
+        "depends_on": [
+          "hold1"
+        ],
+        "timeout_s": 60,
+        "action": "flight.land",
+        "params": {}
+      },
+      {
+        "action_id": "disarm1",
+        "vehicle_id": "ap-1",
+        "depends_on": [
+          "land1"
+        ],
+        "timeout_s": 60,
+        "action": "vehicle.disarm",
+        "params": {}
+      }
+    ]
+  },
+  "jobs_created": 0,
+  "control_links_opened": false
+}

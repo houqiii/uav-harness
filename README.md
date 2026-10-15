@@ -56,6 +56,7 @@ CLI 可直接执行异构示例并输出逐动作结果与 MAVLink 回执：
 | `GET /v1/jobs/{id}` | 执行状态、逐动作证据和协议事件 |
 | `POST /v1/jobs/{id}/cancel` | 取消待执行动作，并尝试已控制飞机的原生保持或模型机收尾 |
 | `POST /v1/jobs/{id}/reconcile` | 用新鲜地面/未解锁状态核实 UNKNOWN；不重放任务 |
+| `POST /v1/intents/preview-stream` | 流式计划预览及等待/推理/生成进度；禁止执行 |
 | `POST /v1/intents` | DeepSeek 翻译；默认返回计划，`execute:true` 提交调度 |
 
 提交动作、计划和意图时必须提供 `Idempotency-Key`。同键同内容返回原任务，同键不同内容被拒绝。键和任务结果持久化在 SQLite；进程重启把未完成任务标为 UNKNOWN，禁止自动重放。
@@ -76,7 +77,8 @@ curl -s http://127.0.0.1:8080/v1/actions \
 
 ```bash
 export DEEPSEEK_API_KEY='填写自己的密钥'
-export DEEPSEEK_MODEL='deepseek-flash'
+export DEEPSEEK_MODEL='deepseek-v4-pro'
+export DEEPSEEK_REASONING_EFFORT='low'
 # 固定直连 https://api.deepseek.com，不读取 USTC 配置或第三方网关地址
 # 环境变量在启动服务前设置；已有服务需先退出，再重新启动。
 .venv/bin/uav-harness --config examples/mock-fleet.json serve

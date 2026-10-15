@@ -1,14 +1,17 @@
 from contextlib import asynccontextmanager, nullcontext
+import asyncio
 import hmac
+import json
 import os
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Annotated
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field
-from .compiler import DEEPSEEK_ENDPOINT, DeepSeekCompiler, planning_context
+from .compiler import COMPILATION_DEADLINE_S, DEFAULT_DEEPSEEK_MODEL, DEEPSEEK_ENDPOINT, DeepSeekCompiler, planning_context
 from .contracts import Action, Contract, Plan
 from .errors import HarnessError, Uncertain
 from .runtime import Harness
@@ -78,7 +81,7 @@ def create_app(settings, compiler=None, *, offline=False):
         return {"vehicles": harness.fleet(), "control_enabled": settings.allow_control,
                 "planning_context": planning_context(harness),
                 "mode": "offline" if offline else "simulator" if kinds == {"simulator"} else "mixed" if "simulator" in kinds else "hardware",
-                "compiler": {"provider": "DeepSeek 官方", "endpoint": DEEPSEEK_ENDPOINT, "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"), "configured": bool(os.getenv("DEEPSEEK_API_KEY"))},
+                "compiler": {"provider": "DeepSeek 官方", "endpoint": DEEPSEEK_ENDPOINT, "model": os.getenv("DEEPSEEK_MODEL", DEFAULT_DEEPSEEK_MODEL), "reasoning_effort": os.getenv("DEEPSEEK_REASONING_EFFORT", "low"), "deadline_s": COMPILATION_DEADLINE_S, "configured": bool(os.getenv("DEEPSEEK_API_KEY"))},
                 "jobs": [harness.journal.get(row[0], events=False) for row in rows]}
 
     @app.post("/v1/actions", status_code=202)
@@ -126,6 +129,48 @@ def create_app(settings, compiler=None, *, offline=False):
             return {"executed": False, "plan": proposal.model_dump()}
         row = await harness.submit(proposal, request_key)
         return {"executed": True, "job": row}
+
+    @app.post("/v1/intents/preview-stream")
+    async def preview_stream(body: Intent, request_key: RequestKey):
+        if body.execute:
+            raise HarnessError("streaming endpoint previews only; execution disabled")
+        harness = app.state.harness
+
+        async def events():
+            updates = asyncio.Queue(maxsize=8)
+            latest = {"phase": "connecting"}
+            started = time.monotonic()
+
+            def progress(event):
+                latest.update(event)
+                if updates.full():
+                    updates.get_nowait()
+                updates.put_nowait({"type": "status", **event})
+
+            async def compile_plan():
+                try:
+                    plan = await compiler.compile(body.query, harness, on_progress=progress)
+                    return {"type": "done", "executed": False, "plan": plan.model_dump()}
+                except HarnessError as exc:
+                    return {"type": "error", "error": str(exc)}
+
+            task = asyncio.create_task(compile_plan())
+            try:
+                yield 'data: '+json.dumps({"type": "status", **latest})+'\n\n'
+                while not task.done():
+                    try:
+                        event = await asyncio.wait_for(updates.get(), 1)
+                    except TimeoutError:
+                        event = {"type": "status", **latest, "elapsed_s": round(time.monotonic()-started, 1)}
+                    yield 'data: '+json.dumps(event, ensure_ascii=False)+'\n\n'
+                yield 'data: '+json.dumps(await task, ensure_ascii=False)+'\n\n'
+            finally:
+                # A closed browser must close the provider request rather than leave an orphan generation.
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     web = Path(__file__).with_name("web")
     app.mount("/assets", StaticFiles(directory=web), name="assets")

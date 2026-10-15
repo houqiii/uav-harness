@@ -1032,3 +1032,12 @@ dialog .primary {
 #offline-capabilities summary {
   cursor: pointer;
 }
+.compile-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.compile-status .helper {
+  flex: 1;
+}

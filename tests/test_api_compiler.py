@@ -113,6 +113,7 @@ def test_intent_api_to_compiler_scheduler_and_wire_with_mock_provider(tmp_path,m
 
 
 async def test_deepseek_uses_official_endpoint_and_key_even_with_ustc_environment(harness, monkeypatch):
+    monkeypatch.delenv('DEEPSEEK_MODEL', raising=False)
     monkeypatch.setenv('DEEPSEEK_API_KEY', 'official-deepseek-test-only')
     monkeypatch.setenv('DEEPSEEK_BASE_URL', 'https://api.llm.ustc.edu.cn/v1')
     monkeypatch.setenv('USTC_API_KEY', 'must-never-be-used')
@@ -124,6 +125,7 @@ async def test_deepseek_uses_official_endpoint_and_key_even_with_ustc_environmen
     await DeepSeekCompiler(httpx.MockTransport(reply)).compile('解锁模型机', harness)
     assert str(observed[0].url) == 'https://api.deepseek.com/chat/completions'
     assert observed[0].headers['Authorization'] == 'Bearer official-deepseek-test-only'
+    assert json.loads(observed[0].content)['model'] == 'deepseek-v4-pro'
 
 
 async def test_missing_deepseek_key_never_falls_back_to_ustc(harness, monkeypatch):

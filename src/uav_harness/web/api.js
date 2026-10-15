@@ -70,3 +70,65 @@ export async function request(
   }
   return data;
 }
+
+export async function previewIntent(query, onProgress, signal) {
+  const headers = {
+    "Content-Type": "application/json",
+    "Idempotency-Key": crypto.randomUUID(),
+  };
+  const token = sessionStorage.getItem("uav.apiToken");
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const deadline = AbortSignal.timeout(200000);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener("abort", abort, { once: true });
+  deadline.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) controller.abort();
+  let reader;
+  try {
+    const response = await fetch("/v1/intents/preview-stream", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, execute: false }),
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(
+        response.status === 401
+          ? "需要访问令牌，请打开“连接设置”"
+          : body.error || `HTTP ${response.status}`,
+      );
+    }
+    if (!response.body) throw new Error("浏览器未提供响应流");
+    reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      if (buffer.length > 1048576) throw new Error("响应流过大，已停止生成");
+      const blocks = buffer.split(/\r?\n\r?\n/);
+      buffer = blocks.pop();
+      for (const block of blocks) {
+        const data = block
+          .split(/\r?\n/)
+          .filter((line) => line.startsWith("data:"))
+          .map((line) => line.slice(5).trimStart())
+          .join("\n");
+        if (!data) continue;
+        const event = JSON.parse(data);
+        if (event.type === "status") onProgress(event);
+        else if (event.type === "error") throw new Error(event.error);
+        else if (event.type === "done") return event;
+      }
+    }
+    throw new Error("生成连接在完整计划返回前关闭；未执行任何指令");
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    deadline.removeEventListener("abort", abort);
+    await reader?.cancel().catch(() => {});
+  }
+}

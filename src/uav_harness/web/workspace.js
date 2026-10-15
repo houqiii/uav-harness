@@ -6,6 +6,7 @@ import {
   actionLabels,
   jobLabels,
   activeJob,
+  previewIntent,
 } from "./api.js";
 let data = null,
   online = false,
@@ -18,7 +19,8 @@ let data = null,
   selectedJob = null,
   selectedDetail = null,
   jobIds = "",
-  previewVersion = 0;
+  previewVersion = 0,
+  previewController = null;
 const storageKey = "uav.pendingSubmission";
 const name = (action) => actionLabels[action.action] || action.action;
 function renderPlan() {
@@ -86,6 +88,7 @@ function updateButtons() {
     !online ||
     !data?.compiler.configured;
   $("compile-button").textContent = compiling ? "正在翻译…" : "生成调度计划";
+  $("cancel-preview").hidden = !compiling;
   document
     .querySelectorAll("[data-example]")
     .forEach(
@@ -288,7 +291,9 @@ export function initWorkspace() {
       $("reconcile-button").disabled = !online;
     }
   };
+  $("cancel-preview").onclick = () => previewController?.abort();
   $("intent").addEventListener("input", () => {
+    previewController?.abort();
     invalidatePlan();
     notice("");
   });
@@ -300,20 +305,35 @@ export function initWorkspace() {
   $("intent-form").onsubmit = async (event) => {
     event.preventDefault();
     const query = $("intent").value.trim();
-    if (!query || compiling) return;
+    if (!query || compiling || !online || !data?.compiler.configured) return;
     invalidatePlan();
     const version = previewVersion;
     compiling = true;
     updateButtons();
     notice("");
+    previewController = new AbortController();
+    const started = performance.now();
+    $("compile-status").hidden = false;
+    $("compile-progress").textContent = "正在连接 DeepSeek 官方…";
     try {
-      const result = await request("/v1/intents", {
-        body: { query, execute: false },
-        key: crypto.randomUUID(),
-        timeout: 55000,
-      });
+      const phases = {
+        connecting: "正在连接 DeepSeek 官方",
+        waiting: "DeepSeek 已接受请求，等待模型输出",
+        reasoning: "模型正在推理",
+        generating: "正在生成调度计划",
+      };
+      const result = await previewIntent(
+        query,
+        (event) => {
+          $("compile-progress").textContent =
+            `${phases[event.phase] || "正在生成"} · ${Math.round(event.elapsed_s || 0)} 秒`;
+        },
+        previewController.signal,
+      );
       if (version === previewVersion) {
         plan = result.plan;
+        $("compile-progress").textContent =
+          `计划生成完成 · ${((performance.now() - started) / 1000).toFixed(1)} 秒 · 未发送指令`;
         origin =
           data?.mode === "offline"
             ? "DeepSeek 真实翻译 · 离线能力校验通过 · 未发送指令"
@@ -325,8 +345,15 @@ export function initWorkspace() {
         renderPlan();
       }
     } catch (error) {
-      notice(error.message);
+      if (error.name === "AbortError")
+        $("compile-progress").textContent = "已停止生成 · 未发送指令";
+      else {
+        $("compile-progress").textContent =
+          `未生成计划 · ${((performance.now() - started) / 1000).toFixed(1)} 秒`;
+        notice(error.message);
+      }
     } finally {
+      previewController = null;
       compiling = false;
       updateButtons();
     }
