@@ -1021,3 +1021,14 @@ dialog .primary {
     margin-bottom: 12px;
   }
 }
+.examples {
+  flex-wrap: wrap;
+}
+#offline-capabilities {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+#offline-capabilities summary {
+  cursor: pointer;
+}

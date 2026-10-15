@@ -36,6 +36,10 @@ HELP = """输入命令后按回车：
 """
 
 
+class NoSerialPort(HarnessError):
+    """No automatic USB candidate; distinct from an ambiguous or failed device."""
+
+
 def choose_port(explicit=None):
     if explicit:
         return explicit
@@ -47,7 +51,7 @@ def choose_port(explicit=None):
     choices = "\n".join(f"  {p.device} ({p.description})" for p in ports)
     if ports:
         raise HarnessError(f"找到多个串口，请用 --port 指定：\n{choices}")
-    raise HarnessError("未找到 USB 串口。插入飞控接口后重试，或用 --port 指定设备路径。")
+    raise NoSerialPort("未找到 USB 串口。插入飞控接口后重试，或用 --port 指定设备路径。")
 
 
 def settings_for(args, state_dir):

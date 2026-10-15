@@ -10,7 +10,9 @@
 
 ```bash
 bash scripts/mac-dashboard.sh
-# 打开 http://127.0.0.1:8080；无硬件试运行加 --mock
+# 打开 http://127.0.0.1:8080；无串口自动进入离线推演
+# 仅测试真实 LLM 输出：bash scripts/mac-dashboard.sh --offline
+# 测试协议执行回执：bash scripts/mac-dashboard.sh --mock
 ```
 
 自然语言复用后端 DeepSeek 配置；未配置时可使用明确标注的固定测试计划。视频在“连接设置”填写 HTTP 视频地址，未接入的云台显示实际缺失状态。无需 Node/npm，HTML/JS/CSS 随 Python 包提供。详见 [网页控制台](docs/web-console.md)。

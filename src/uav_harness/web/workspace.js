@@ -69,13 +69,16 @@ function updateButtons() {
     );
   $("intent").disabled = submitting || Boolean(requestKey && !submitted);
   $("execute-button").disabled = !ready || submitting || submitted || compiling;
-  $("execute-button").textContent = submitting
-    ? "正在提交…"
-    : submitted
-      ? "已提交调度"
-      : requestKey
-        ? "查询 / 重试本次提交"
-        : "执行计划";
+  $("execute-button").textContent =
+    data?.mode === "offline"
+      ? "离线推演 · 不执行"
+      : submitting
+        ? "正在提交…"
+        : submitted
+          ? "已提交调度"
+          : requestKey
+            ? "查询 / 重试本次提交"
+            : "执行计划";
   $("compile-button").disabled =
     compiling ||
     submitting ||
@@ -107,11 +110,42 @@ function invalidatePlan() {
 export function updateWorkspace(snapshot, connected) {
   data = snapshot;
   online = connected;
+  if (data?.mode === "offline" && requestKey) {
+    // Keep an unresolved hardware submission in sessionStorage for a later real
+    // connection, but do not let it lock an unrelated offline planning session.
+    requestKey = null;
+    plan = null;
+    origin = "";
+    submitted = false;
+    renderPlan();
+  }
   $("compiler-note").textContent = !online
     ? "服务断开，等待重新连接"
     : data.compiler.configured
       ? "DeepSeek 已配置 · 生成计划后可查看并执行"
       : "DeepSeek 未配置：自然语言翻译暂不可用；快捷示例可生成固定测试计划。";
+  const offline = data?.mode === "offline";
+  $("offline-capabilities").hidden = !offline;
+  $("planning-context").textContent = JSON.stringify(
+    data?.planning_context || [],
+    null,
+    2,
+  );
+  document.querySelectorAll("[data-example]").forEach((button) => {
+    const bench = ["motor", "probe"].includes(button.dataset.example);
+    button.hidden = offline ? bench : !bench;
+  });
+  $("intent").placeholder = offline
+    ? "例如：ap-1 起飞2米，向机头前进3米，悬停2秒后降落"
+    : "例如：让模型机的 1 号电机转动 5 秒";
+  $("job-empty").querySelector("p").textContent = offline
+    ? "离线推演仅生成计划，不派发任务或产生飞控回执"
+    : "任务执行后，回执和结果将在这里显示";
+  if (online && offline) {
+    $("compiler-note").textContent = data.compiler.configured
+      ? `${data.compiler.provider} / ${data.compiler.model} · 真实模型调用，离线校验；不发送指令`
+      : "离线界面已就绪。请在启动终端设置 DEEPSEEK_API_KEY 后重启，才能调用真实模型。";
+  }
   const jobs = data?.jobs || [];
   if (requestKey) {
     const found = jobs.find((j) => j.request_key === requestKey);
@@ -280,7 +314,14 @@ export function initWorkspace() {
       });
       if (version === previewVersion) {
         plan = result.plan;
-        origin = "DeepSeek 翻译 · 能力校验通过";
+        origin =
+          data?.mode === "offline"
+            ? "DeepSeek 真实翻译 · 离线能力校验通过 · 未发送指令"
+            : "DeepSeek 翻译 · 能力校验通过";
+        if (data?.mode === "offline") {
+          $("plan-json").hidden = false;
+          $("json-button").setAttribute("aria-expanded", "true");
+        }
         renderPlan();
       }
     } catch (error) {
@@ -296,6 +337,19 @@ export function initWorkspace() {
         const vehicle = data?.vehicles.find(
           (v) => v.vehicle_id === $("vehicle-select").value,
         );
+        const examples = {
+          movement: `${vehicle?.profile === "flight" ? vehicle.vehicle_id : data.vehicles.find((v) => v.profile === "flight")?.vehicle_id || "ap-1"} 起飞2米，向机头前进3米，再后退1米，悬停2秒后降落`,
+          mixed:
+            "让 ap-1 和 px4-1 分别起飞2米，各向东移动1米，等两架都到达后一起降落；不要操作 model-1",
+          limits:
+            "让 model-1 向前飞3米，再让 ap-1 起飞到120米；如果能力不支持，请拒绝生成计划",
+        };
+        if (button.dataset.example in examples) {
+          $("intent").value = examples[button.dataset.example];
+          invalidatePlan();
+          notice("");
+          return;
+        }
         if (!vehicle || vehicle.profile !== "model_bench") {
           notice("这两个示例适用于模型机；请选择 model_bench 机型。");
           return;

@@ -61,13 +61,15 @@ export function initTelemetry() {
     $("pwm-grid").append(channel);
   }
 }
-export function renderTelemetry(vehicle, online) {
+export function renderTelemetry(vehicle, online, offline = false) {
   const v = online ? vehicle : null;
   const connected = Boolean(v?.connected);
   $("vehicle-state").className = "state" + (connected ? "" : " muted");
   $("vehicle-state").replaceChildren(
     element("i"),
-    document.createTextNode(connected ? "在线" : online ? "离线" : "断开"),
+    document.createTextNode(
+      offline ? "未接入" : connected ? "在线" : online ? "离线" : "断开",
+    ),
   );
   $("mode").textContent = modeName(v);
   $("armed").textContent = v?.heartbeat
@@ -108,10 +110,14 @@ export function renderTelemetry(vehicle, online) {
   $("position").textContent =
     pos && [pos.x, pos.y, pos.z].every(Number.isFinite)
       ? `${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)} m`
-      : "缺失 / 过期";
+      : offline
+        ? "—"
+        : "缺失 / 过期";
   $("telemetry-note").textContent = v?.servo_output
     ? "实时更新"
-    : "输出缺失 / 过期";
+    : offline
+      ? "离线推演 · 无遥测"
+      : "输出缺失 / 过期";
   for (let i = 1; i <= 8; i++) {
     const value = v?.servo_output?.[`servo${i}_raw`],
       validValue = Number.isFinite(value) && value > 0;

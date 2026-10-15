@@ -19,23 +19,29 @@ function selectedVehicle() {
 }
 function render() {
   const v = selectedVehicle();
-  renderTelemetry(v, connected);
-  renderGimbal(v, connected);
+  const offline = snapshot?.mode === "offline";
+  renderTelemetry(v, connected, offline);
+  renderGimbal(v, connected && !offline);
+  if (offline) $("video-message").textContent = "离线推演 · 云台未接入";
   updateWorkspace(snapshot, connected);
   const state = $("link-state");
-  state.className = "state" + (connected ? "" : " muted");
+  state.className = "state" + (connected && !offline ? "" : " muted");
   const labels = {
     simulator: "模拟链路",
     hardware: "实机链路",
     mixed: "混合链路",
+    offline: "离线推演",
   };
   state.replaceChildren(
     element("i"),
     document.createTextNode(connected ? labels[snapshot.mode] : "连接断开"),
   );
-  $("control-mode").textContent = connected
-    ? `${snapshot.mode === "simulator" ? "协议模拟 · " : ""}${snapshot.control_enabled ? "控制已启用" : "只读观察"}`
-    : "服务不可用";
+  $("control-mode").textContent =
+    connected && offline
+      ? "仅生成计划 · 未连接飞控 · 不发送指令"
+      : connected
+        ? `${snapshot.mode === "simulator" ? "协议模拟 · " : ""}${snapshot.control_enabled ? "控制已启用" : "只读观察"}`
+        : "服务不可用";
 }
 async function poll() {
   if (polling) return;
@@ -46,11 +52,19 @@ async function poll() {
     const values = snapshot.vehicles.map((v) => v.vehicle_id);
     if (!values.includes(selected))
       selected =
+        (snapshot.mode === "offline"
+          ? values.find(
+              (id) =>
+                snapshot.vehicles.find((v) => v.vehicle_id === id).profile ===
+                "flight",
+            )
+          : null) ||
         values.find(
           (id) =>
             snapshot.vehicles.find((v) => v.vehicle_id === id).profile ===
             "model_bench",
-        ) || values[0];
+        ) ||
+        values[0];
     const selector = $("vehicle-select");
     if (
       Array.from(selector.options)

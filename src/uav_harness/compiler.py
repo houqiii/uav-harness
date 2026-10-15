@@ -7,6 +7,14 @@ from .contracts import Plan
 from .errors import HarnessError
 
 
+def planning_context(harness):
+    return [{"vehicle_id": s.config.vehicle_id, "backend": s.config.backend,
+             "profile": s.config.profile, "available_actions": sorted(s.actions),
+             "max_height_m": s.config.max_height_m,
+             "max_relative_distance_m": s.config.max_relative_distance_m}
+            for s in harness.sessions.values()]
+
+
 class DeepSeekCompiler:
     def __init__(self, http_transport=None):
         self.http_transport = http_transport
@@ -20,11 +28,7 @@ class DeepSeekCompiler:
             raise HarnessError("DEEPSEEK_API_KEY is not configured")
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise HarnessError("DeepSeek endpoint must be a plain HTTPS base URL")
-        context = [{"vehicle_id": s.config.vehicle_id, "backend": s.config.backend,
-                    "profile": s.config.profile, "available_actions": sorted(s.actions),
-                    "max_height_m": s.config.max_height_m,
-                    "max_relative_distance_m": s.config.max_relative_distance_m}
-                   for s in harness.sessions.values()]
+        context = planning_context(harness)
         prompt = """Translate the user's intent into one JSON object matching the supplied Plan schema.
 Use only the listed vehicles and their available_actions. Do not invent MAVLink command IDs.
 Actions on each vehicle must be dependency-ordered. Dependencies refer to action_id.

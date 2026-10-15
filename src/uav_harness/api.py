@@ -1,13 +1,14 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 import hmac
 import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Annotated
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field
-from .compiler import DeepSeekCompiler
+from .compiler import DeepSeekCompiler, planning_context
 from .contracts import Action, Contract, Plan
 from .errors import HarnessError, Uncertain
 from .runtime import Harness
@@ -21,7 +22,9 @@ class Intent(Contract):
 RequestKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=100)]
 
 
-def create_app(settings, compiler=None):
+def create_app(settings, compiler=None, *, offline=False):
+    if offline:
+        settings = settings.model_copy(deep=True, update={"allow_control": False})
     token = os.getenv("HARNESS_API_TOKEN")
     if settings.api_host not in ("127.0.0.1", "localhost", "::1") and not token:
         raise HarnessError("HARNESS_API_TOKEN is required for a non-loopback HTTP bind")
@@ -29,13 +32,21 @@ def create_app(settings, compiler=None):
 
     @asynccontextmanager
     async def lifespan(app):
-        harness = Harness(settings)
-        app.state.harness = harness
-        await harness.open()
-        try:
-            yield
-        finally:
-            await harness.close()
+        # Preview must not open links or mutate the real controller's job journal.
+        with TemporaryDirectory(prefix="uav-offline-") if offline else nullcontext() as folder:
+            active = settings.model_copy(update={"state_dir": Path(folder)}) if offline else settings
+            harness = Harness(active)
+            app.state.harness = harness
+            if not offline:
+                await harness.open()
+            try:
+                yield
+            finally:
+                await harness.close()
+
+    def require_execution():
+        if offline:
+            raise HarnessError("offline preview only; execution disabled")
 
     app = FastAPI(title="UAV Harness", version="0.1.0", lifespan=lifespan)
 
@@ -53,7 +64,7 @@ def create_app(settings, compiler=None):
     @app.get("/health")
     async def health():
         states = app.state.harness.fleet()
-        return {"service": "ready", "connected_vehicles": sum(s["connected"] for s in states), "qgc_required": False}
+        return {"service": "ready", "connected_vehicles": sum(s["connected"] for s in states), "qgc_required": False, "offline": offline}
 
     @app.get("/v1/vehicles")
     async def vehicles():
@@ -65,16 +76,19 @@ def create_app(settings, compiler=None):
         kinds = {link.kind for link in settings.links}
         rows = harness.journal.db.execute("SELECT id FROM jobs ORDER BY created DESC LIMIT 12").fetchall()
         return {"vehicles": harness.fleet(), "control_enabled": settings.allow_control,
-                "mode": "simulator" if kinds == {"simulator"} else "mixed" if "simulator" in kinds else "hardware",
-                "compiler": {"provider": "DeepSeek", "configured": bool(os.getenv("DEEPSEEK_API_KEY"))},
+                "planning_context": planning_context(harness),
+                "mode": "offline" if offline else "simulator" if kinds == {"simulator"} else "mixed" if "simulator" in kinds else "hardware",
+                "compiler": {"provider": "DeepSeek", "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"), "configured": bool(os.getenv("DEEPSEEK_API_KEY"))},
                 "jobs": [harness.journal.get(row[0], events=False) for row in rows]}
 
     @app.post("/v1/actions", status_code=202)
     async def action(body: Action, request_key: RequestKey):
+        require_execution()
         return await app.state.harness.submit(Plan(actions=[body]), request_key)
 
     @app.post("/v1/plans", status_code=202)
     async def plan(body: Plan, request_key: RequestKey):
+        require_execution()
         return await app.state.harness.submit(body, request_key)
 
     @app.post("/v1/plans/validate")
@@ -88,16 +102,19 @@ def create_app(settings, compiler=None):
 
     @app.post("/v1/jobs/{job_id}/cancel")
     async def cancel(job_id: str):
+        require_execution()
         return await app.state.harness.cancel(job_id)
 
     @app.post("/v1/jobs/{job_id}/reconcile")
     async def reconcile(job_id: str):
+        require_execution()
         return await app.state.harness.reconcile(job_id)
 
     @app.post("/v1/intents")
     async def intent(body: Intent, request_key: RequestKey):
         harness = app.state.harness
         if body.execute:
+            require_execution()
             existing = harness.journal.db.execute("SELECT id FROM jobs WHERE request_key=?", (request_key,)).fetchone()
             if existing:
                 row = harness.journal.get(existing[0])

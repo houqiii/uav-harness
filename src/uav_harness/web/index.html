@@ -55,12 +55,40 @@
               >
                 起飞探针
               </button>
+              <button
+                type="button"
+                class="button small secondary"
+                data-example="movement"
+                hidden
+              >
+                前后移动
+              </button>
+              <button
+                type="button"
+                class="button small secondary"
+                data-example="mixed"
+                hidden
+              >
+                异构协同
+              </button>
+              <button
+                type="button"
+                class="button small secondary"
+                data-example="limits"
+                hidden
+              >
+                越界请求
+              </button>
             </div>
             <button id="compile-button" class="button primary" type="submit">
               生成调度计划
             </button>
           </div>
           <p id="compiler-note" class="helper">正在检查编译器…</p>
+          <details id="offline-capabilities" hidden>
+            <summary>推演机群与能力</summary>
+            <pre id="planning-context" class="code-box"></pre>
+          </details>
         </form>
         <section class="plan-section" aria-labelledby="plan-title">
           <div class="section-head">

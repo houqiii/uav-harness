@@ -11,6 +11,27 @@ bash scripts/mac-dashboard.sh
 
 多串口用 `--port /dev/cu.usbserial-XXXX`，只观察用 `--observe`，HTTP 端口用 `--http-port 8081`。已有机群配置可用 `bash scripts/mac-dashboard.sh --config examples/mock-fleet.json`；该方式保留配置中的机型、链路、控制开关、状态目录和 HTTP 绑定。默认实机入口与已验收终端使用相同的 ArduCopter 4.5 / board 1010 / sys 1 / comp 1 模型机配置，且共用 `state/bench-console` 的任务记录与未决结果约束。
 
+## 不接串口：离线测试 LLM 调度
+
+```bash
+export DEEPSEEK_API_KEY='自己的密钥'
+bash scripts/mac-dashboard.sh --offline
+```
+
+打开 <http://127.0.0.1:8080>。默认命令 `bash scripts/mac-dashboard.sh` 未检测到 USB 串口时也会自动进入此模式；`--offline` 可保证即使电脑上有串口也不打开。多串口歧义或显式指定串口出错时仍会报错，不悄悄切换模式。
+
+离线表示不连接飞控，模型请求仍通过后端调用真实 DeepSeek，需要有效密钥及模型服务网络。此模式不启动协议模拟器，不产生遥测，不发送 MAVLink 命令；服务端拒绝动作、计划执行及 `execute:true`，网页执行按钮也停用。它不读取或更改实机 SQLite 任务记录。
+
+默认提供 3 份虚拟能力档案：`ap-1`（ArduPilot 可飞行）、`px4-1`（PX4 可飞行）、`model-1`（模型机，只开放台架动作）。展开“推演机群与能力”查看与模型提示词相同的动作列表、最大高度和最大相对距离。已有硬件档案可用 `--offline --config examples/model-serial.json` 加载能力，仍不连接其中配置的设备。
+
+可点击“前后移动”“异构协同”“越界请求”填入例句，再点击“生成调度计划”。例如：
+
+> ap-1 起飞2米，向机头前进3米，再后退1米，悬停2秒后降落
+
+查看动作列表与默认展开的 JSON：前后移动应使用 `body_flu`，前进 x 为正、后退 x 为负；检查 action_id / depends_on 是否正确串联。异构示例可检查两架飞机并行执行和共同到达后的依赖。越界示例用于检查能力/范围拒绝，而不是自动修正成另一个任务。生成计划只证明类型、能力、参数和 DAG 校验通过；无法代替用户对原句含义的判断，也不证明真实飞机当前满足执行条件。
+
+`--mock` 是另一种模式：会运行 MAVLink 软件协议对端，允许测试任务执行/回执/收尾。离线推演只检查 LLM 输出，二者不要混淆。没有密钥时界面仍可打开、填入例句和查看能力，但不会伪造模型输出。关闭服务后不保留离线预览。
+
 ## 一句话调度
 
 在启动服务的同一终端配置已有 DeepSeek 密钥；密钥只在后端使用，不要填进网页或提交到 Git。
