@@ -143,7 +143,7 @@ export function updateWorkspace(snapshot, connected) {
     : "任务执行后，回执和结果将在这里显示";
   if (online && offline) {
     $("compiler-note").textContent = data.compiler.configured
-      ? `${data.compiler.provider} / ${data.compiler.model} · 真实模型调用，离线校验；不发送指令`
+      ? `${data.compiler.provider} / ${data.compiler.model} · ${data.compiler.endpoint} · 不发送指令`
       : "离线界面已就绪。请在启动终端设置 DEEPSEEK_API_KEY 后重启，才能调用真实模型。";
   }
   const jobs = data?.jobs || [];

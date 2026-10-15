@@ -110,3 +110,26 @@ def test_intent_api_to_compiler_scheduler_and_wire_with_mock_provider(tmp_path,m
         assert mismatch.status_code==409
         assert client.post("/v1/actions",json={"action_id":"d","vehicle_id":"model-1","action":"vehicle.disarm","params":{}},headers={"Idempotency-Key":"intent-cleanup"}).status_code==202
 
+
+
+async def test_deepseek_uses_official_endpoint_and_key_even_with_ustc_environment(harness, monkeypatch):
+    monkeypatch.setenv('DEEPSEEK_API_KEY', 'official-deepseek-test-only')
+    monkeypatch.setenv('DEEPSEEK_BASE_URL', 'https://api.llm.ustc.edu.cn/v1')
+    monkeypatch.setenv('USTC_API_KEY', 'must-never-be-used')
+    monkeypatch.setenv('USTC_BASE_URL', 'https://api.llm.ustc.edu.cn/v1')
+    observed = []
+    def reply(request):
+        observed.append(request)
+        return httpx.Response(200, json={'choices': [{'message': {'content': json.dumps({'actions': [arm()]})}}]})
+    await DeepSeekCompiler(httpx.MockTransport(reply)).compile('解锁模型机', harness)
+    assert str(observed[0].url) == 'https://api.deepseek.com/chat/completions'
+    assert observed[0].headers['Authorization'] == 'Bearer official-deepseek-test-only'
+
+
+async def test_missing_deepseek_key_never_falls_back_to_ustc(harness, monkeypatch):
+    monkeypatch.delenv('DEEPSEEK_API_KEY', raising=False)
+    monkeypatch.setenv('USTC_API_KEY', 'must-never-be-used')
+    calls = []
+    with pytest.raises(HarnessError, match='DEEPSEEK_API_KEY'):
+        await DeepSeekCompiler(httpx.MockTransport(lambda request: calls.append(request))).compile('解锁模型机', harness)
+    assert calls == []

@@ -1,10 +1,12 @@
 """DeepSeek proposes typed action plans; the Harness owns execution."""
 import json
 import os
-from urllib.parse import urlsplit
 import httpx
 from .contracts import Plan
 from .errors import HarnessError
+
+
+DEEPSEEK_ENDPOINT = "https://api.deepseek.com"
 
 
 def planning_context(harness):
@@ -21,13 +23,12 @@ class DeepSeekCompiler:
 
     async def compile(self, query, harness):
         key = os.getenv("DEEPSEEK_API_KEY")
-        endpoint = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com").rstrip("/")
+        # This compiler only uses the user's official DeepSeek account. Inherited
+        # gateway URLs and USTC credentials must never redirect its requests.
+        endpoint = DEEPSEEK_ENDPOINT
         model = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
-        parsed = urlsplit(endpoint)
         if not key:
             raise HarnessError("DEEPSEEK_API_KEY is not configured")
-        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
-            raise HarnessError("DeepSeek endpoint must be a plain HTTPS base URL")
         context = planning_context(harness)
         prompt = """Translate the user's intent into one JSON object matching the supplied Plan schema.
 Use only the listed vehicles and their available_actions. Do not invent MAVLink command IDs.

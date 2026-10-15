@@ -77,7 +77,7 @@ curl -s http://127.0.0.1:8080/v1/actions \
 ```bash
 export DEEPSEEK_API_KEY='填写自己的密钥'
 export DEEPSEEK_MODEL='deepseek-flash'
-# 可选 DEEPSEEK_BASE_URL，默认 https://api.deepseek.com
+# 固定直连 https://api.deepseek.com，不读取 USTC 配置或第三方网关地址
 # 环境变量在启动服务前设置；已有服务需先退出，再重新启动。
 .venv/bin/uav-harness --config examples/mock-fleet.json serve
 ```

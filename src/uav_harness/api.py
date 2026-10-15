@@ -8,7 +8,7 @@ from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field
-from .compiler import DeepSeekCompiler, planning_context
+from .compiler import DEEPSEEK_ENDPOINT, DeepSeekCompiler, planning_context
 from .contracts import Action, Contract, Plan
 from .errors import HarnessError, Uncertain
 from .runtime import Harness
@@ -78,7 +78,7 @@ def create_app(settings, compiler=None, *, offline=False):
         return {"vehicles": harness.fleet(), "control_enabled": settings.allow_control,
                 "planning_context": planning_context(harness),
                 "mode": "offline" if offline else "simulator" if kinds == {"simulator"} else "mixed" if "simulator" in kinds else "hardware",
-                "compiler": {"provider": "DeepSeek", "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"), "configured": bool(os.getenv("DEEPSEEK_API_KEY"))},
+                "compiler": {"provider": "DeepSeek 官方", "endpoint": DEEPSEEK_ENDPOINT, "model": os.getenv("DEEPSEEK_MODEL", "deepseek-flash"), "configured": bool(os.getenv("DEEPSEEK_API_KEY"))},
                 "jobs": [harness.journal.get(row[0], events=False) for row in rows]}
 
     @app.post("/v1/actions", status_code=202)

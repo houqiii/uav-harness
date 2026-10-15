@@ -20,7 +20,7 @@ bash scripts/mac-dashboard.sh --offline
 
 打开 <http://127.0.0.1:8080>。默认命令 `bash scripts/mac-dashboard.sh` 未检测到 USB 串口时也会自动进入此模式；`--offline` 可保证即使电脑上有串口也不打开。多串口歧义或显式指定串口出错时仍会报错，不悄悄切换模式。
 
-离线表示不连接飞控，模型请求仍通过后端调用真实 DeepSeek，需要有效密钥及模型服务网络。此模式不启动协议模拟器，不产生遥测，不发送 MAVLink 命令；服务端拒绝动作、计划执行及 `execute:true`，网页执行按钮也停用。它不读取或更改实机 SQLite 任务记录。
+离线表示不连接飞控。模型请求固定使用 DeepSeek 官方 `https://api.deepseek.com` 和 `DEEPSEEK_API_KEY`；不读取 USTC 密钥，不接受 `DEEPSEEK_BASE_URL` 的第三方地址覆盖，也不会失败后切换服务商。界面显示官方地址。需要有效的 DeepSeek 官方密钥及模型服务网络。此模式不启动协议模拟器，不产生遥测，不发送 MAVLink 命令；服务端拒绝动作、计划执行及 `execute:true`，网页执行按钮也停用。它不读取或更改实机 SQLite 任务记录。
 
 默认提供 3 份虚拟能力档案：`ap-1`（ArduPilot 可飞行）、`px4-1`（PX4 可飞行）、`model-1`（模型机，只开放台架动作）。展开“推演机群与能力”查看与模型提示词相同的动作列表、最大高度和最大相对距离。已有硬件档案可用 `--offline --config examples/model-serial.json` 加载能力，仍不连接其中配置的设备。
 
