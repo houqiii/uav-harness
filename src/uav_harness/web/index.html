@@ -4,8 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="color-scheme" content="dark" />
-    <title>UAV Harness · 飞行控制台</title>
+    <title>无人机群意图控制系统 · UAV Harness</title>
     <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="stylesheet" href="/assets/demo.css" />
     <script type="module" src="/assets/app.js"></script>
   </head>
   <body>
@@ -16,14 +17,248 @@
           <path d="m14 7-6 12h8l-2 10 7-13h-8Z" fill="#10282a" /></svg
         >UAV HARNESS</a
       >
-      <span class="page-name">飞行控制台</span>
+      <span class="page-name">无人机群意图控制系统</span>
       <div class="header-actions">
         <span id="link-state" class="state muted"><i></i>连接中</span
         ><button id="settings-button" class="button secondary">连接设置</button>
       </div>
     </header>
+    <nav class="view-nav" aria-label="工作区">
+      <button id="demo-tab" class="view-tab selected" aria-current="page">
+        任务演练
+      </button>
+      <button id="console-tab" class="view-tab">指令工作台</button>
+      <span class="helper">PX4 飞控适配 · 载荷待接入</span>
+    </nav>
     <div id="notice" class="notice" role="status" hidden></div>
-    <main class="console-grid">
+    <main id="demo-console" class="demo-grid">
+      <div class="demo-left">
+        <section class="panel demo-composer" aria-labelledby="demo-title">
+          <div class="section-head">
+            <h1 id="demo-title">自然语言任务</h1>
+            <span class="state"><i></i>模拟演练</span>
+          </div>
+          <form id="demo-form" class="demo-input-row">
+            <label class="sr-only" for="demo-intent">描述搜索任务</label>
+            <input
+              id="demo-intent"
+              maxlength="1000"
+              value="帮我找一个戴着红帽子的人"
+              autocomplete="off"
+            />
+            <button id="demo-parse" class="button secondary" type="submit">
+              DeepSeek 解析
+            </button>
+            <button id="demo-start" class="button primary" type="button">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="m5 2 9 6-9 6Z" fill="currentColor" /></svg
+              >开始演练
+            </button>
+          </form>
+          <div class="demo-helper-row">
+            <p id="demo-source" class="helper">固定任务模板 · 未调用模型</p>
+            <button id="demo-cancel-parse" class="text-button" hidden>
+              停止解析
+            </button>
+            <p class="demo-disclosure">
+              模拟演练 · 不连接飞控 · 视觉结果为预设数据
+            </p>
+          </div>
+          <p id="demo-error" class="error-copy" role="alert" hidden></p>
+          <details class="demo-plan-details">
+            <summary>查看任务配置与解析结果</summary>
+            <pre id="demo-plan" class="code-box"></pre>
+          </details>
+        </section>
+        <ol
+          id="demo-stages"
+          class="panel demo-stages"
+          aria-label="任务阶段"
+        ></ol>
+        <section class="panel scan-panel" aria-labelledby="scan-title">
+          <div class="section-head">
+            <h2 id="scan-title">环视扫描</h2>
+            <span id="demo-scan-count" class="helper">等待开始 · 0 / 12</span>
+          </div>
+          <div class="scan-body">
+            <div class="compass-wrap">
+              <svg
+                id="demo-compass"
+                viewBox="0 0 320 320"
+                role="img"
+                aria-label="360度环视扫描方位盘"
+              ></svg>
+            </div>
+            <div class="target-summary">
+              <span id="demo-phase" class="phase-label" role="status"
+                >等待任务</span
+              >
+              <h3>戴红帽子的人</h3>
+              <dl class="target-facts">
+                <div>
+                  <dt>目标状态</dt>
+                  <dd id="demo-target">等待扫描</dd>
+                </div>
+                <div>
+                  <dt>目标方位</dt>
+                  <dd id="demo-bearing">—</dd>
+                </div>
+                <div>
+                  <dt>水平距离</dt>
+                  <dd id="demo-distance">—</dd>
+                </div>
+                <div>
+                  <dt>数据来源</dt>
+                  <dd>预设结果</dd>
+                </div>
+              </dl>
+              <div class="approach-progress">
+                <div>
+                  <span>接近进度</span
+                  ><span id="demo-approach-label">0 / 60 m</span>
+                </div>
+                <progress
+                  id="demo-approach"
+                  max="60"
+                  value="0"
+                  aria-label="模拟接近距离"
+                ></progress>
+                <p class="helper">观察位置：水平 20 m · 保持高度</p>
+              </div>
+            </div>
+          </div>
+          <div class="scan-frames-head">
+            <span>各角度画面</span
+            ><span class="helper">12 方向示意帧 · 点击查看</span>
+          </div>
+          <div id="demo-frames" class="demo-frames" aria-label="扫描画面"></div>
+          <div class="scan-legend">
+            <span><i class="legend-wait"></i>等待</span
+            ><span><i class="legend-pending"></i>分析中</span
+            ><span><i class="legend-clear"></i>已检查</span
+            ><span><i class="legend-found"></i>发现候选</span>
+          </div>
+        </section>
+        <section
+          class="panel demo-events-panel"
+          aria-labelledby="demo-events-title"
+        >
+          <div class="section-head">
+            <h2 id="demo-events-title">任务事件</h2>
+            <span id="demo-elapsed" class="helper">演练时间 00:00</span>
+          </div>
+          <ol id="demo-events" class="demo-events" aria-live="polite"></ol>
+          <p id="demo-events-empty" class="helper">
+            开始演练后，采集、分析与调度过程将在这里显示。
+          </p>
+        </section>
+      </div>
+      <aside class="demo-right">
+        <section
+          class="panel demo-telemetry"
+          aria-labelledby="demo-telemetry-title"
+        >
+          <div class="section-head">
+            <h2 id="demo-telemetry-title">实时遥测</h2>
+            <span class="state muted"><i></i>模拟数据</span>
+          </div>
+          <div class="demo-metrics">
+            <div>
+              <span>相对起点高度</span
+              ><strong id="demo-altitude">0.0<small> m</small></strong>
+            </div>
+            <div>
+              <span>水平速度</span
+              ><strong id="demo-speed">0.0<small> m/s</small></strong>
+            </div>
+            <div>
+              <span>机头航向</span
+              ><strong id="demo-heading">000<small>°</small></strong>
+            </div>
+            <div>
+              <span>电池电量</span
+              ><strong id="demo-battery">90<small>%</small></strong>
+            </div>
+          </div>
+          <div class="demo-position">
+            <span id="demo-flight-mode">PX4 · 等待任务</span
+            ><span id="demo-ned">N 0.0 · E 0.0 · D 0.0 m</span>
+          </div>
+        </section>
+        <section class="panel demo-camera" aria-labelledby="demo-camera-title">
+          <div class="section-head">
+            <h2 id="demo-camera-title">云台画面</h2>
+            <span class="helper">演示素材 · 非实时</span>
+          </div>
+          <div class="demo-camera-frame">
+            <img
+              id="demo-camera-image"
+              src="/assets/search-field.jpg"
+              alt="AI生成的演示场地，一位戴红帽子的人站在草地上；非实拍图像"
+            />
+            <div class="camera-topline">
+              <span id="demo-frame-label">演示素材预览</span><span>SIM</span>
+            </div>
+            <div id="demo-box" class="demo-target-box" hidden>
+              <span>戴红帽子的人 · 预设</span>
+            </div>
+            <div class="camera-crosshair" aria-hidden="true"></div>
+            <div class="camera-bottomline">
+              <span id="demo-camera-caption">等待扫描</span
+              ><span id="demo-camera-source">AI 生成素材</span>
+            </div>
+          </div>
+          <div class="demo-gimbal-facts">
+            <div><span>俯仰</span><strong>−35°</strong></div>
+            <div>
+              <span>航向 · 地球坐标</span
+              ><strong id="demo-gimbal-heading">000°</strong>
+            </div>
+            <div><span>变焦</span><strong id="demo-zoom">1.0×</strong></div>
+          </div>
+          <p class="helper camera-note">
+            云台／相机待选型 · Qwen 视觉接口待接入
+          </p>
+          <button id="demo-camera-live" class="text-button" hidden>
+            返回当前演练画面
+          </button>
+        </section>
+        <section
+          class="panel demo-controls"
+          aria-labelledby="demo-controls-title"
+        >
+          <div class="section-head">
+            <h2 id="demo-controls-title">演练控制</h2>
+            <span class="helper">仅作用于模拟流程</span>
+          </div>
+          <div class="demo-options">
+            <label
+              >演练场景<select id="demo-scenario" aria-label="演练场景">
+                <option value="found">找到目标并接近</option>
+                <option value="missing">未发现目标</option>
+                <option value="lost">接近时目标丢失</option>
+                <option value="timeout">接近时视觉超时</option>
+              </select></label
+            ><label
+              >播放速度<select id="demo-rate" aria-label="播放速度">
+                <option value="1">1×</option>
+                <option value="3">3×</option>
+                <option value="6">6×</option>
+              </select></label
+            >
+          </div>
+          <div class="demo-control-buttons">
+            <button id="demo-pause" class="button secondary" disabled>
+              暂停演练</button
+            ><button id="demo-reset" class="button secondary">重置演练</button>
+          </div>
+          <p id="demo-result" class="helper">
+            预设流程：50 m 高度 → 12 方向扫描 → 确认 → 分段接近 → 悬停
+          </p>
+        </section>
+      </aside>
+    </main>
+    <main id="control-console" class="console-grid" hidden>
       <section class="panel workspace" aria-labelledby="workspace-title">
         <div class="section-head">
           <div>
@@ -252,8 +487,11 @@
         </section>
       </aside>
     </main>
-    <footer>
+    <footer id="control-footer" hidden>
       指令与遥测由本地 Harness 提供<span id="control-mode"></span>
+    </footer>
+    <footer id="demo-footer">
+      模拟飞行与预设视觉结果 · 不发送飞控指令 · DeepSeek 解析需单独触发
     </footer>
     <dialog id="settings-dialog">
       <form id="settings-form">

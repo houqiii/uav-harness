@@ -19,7 +19,7 @@ uav-harness = "uav_harness.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-uav_harness = ["web/*.html", "web/*.css", "web/*.js"]
+uav_harness = ["web/*.html", "web/*.css", "web/*.js", "web/*.jpg"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

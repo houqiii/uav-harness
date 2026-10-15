@@ -71,7 +71,12 @@ export async function request(
   return data;
 }
 
-export async function previewIntent(query, onProgress, signal) {
+export async function previewIntent(
+  query,
+  onProgress,
+  signal,
+  path = "/v1/intents/preview-stream",
+) {
   const headers = {
     "Content-Type": "application/json",
     "Idempotency-Key": crypto.randomUUID(),
@@ -86,7 +91,7 @@ export async function previewIntent(query, onProgress, signal) {
   if (signal?.aborted) controller.abort();
   let reader;
   try {
-    const response = await fetch("/v1/intents/preview-stream", {
+    const response = await fetch(path, {
       method: "POST",
       headers,
       body: JSON.stringify({ query, execute: false }),

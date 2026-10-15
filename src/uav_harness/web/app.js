@@ -7,6 +7,7 @@ import {
   refreshVideo,
 } from "./gimbal.js";
 import { initWorkspace, updateWorkspace, pollJob } from "./workspace.js";
+import { initDemo, updateDemoService } from "./demo.js";
 let snapshot = null,
   connected = false,
   selected = "",
@@ -14,6 +15,7 @@ let snapshot = null,
   lastError = "";
 initTelemetry();
 initWorkspace();
+initDemo();
 function selectedVehicle() {
   return snapshot?.vehicles.find((v) => v.vehicle_id === selected);
 }
@@ -24,6 +26,7 @@ function render() {
   renderGimbal(v, connected && !offline);
   if (offline) $("video-message").textContent = "离线推演 · 云台未接入";
   updateWorkspace(snapshot, connected);
+  updateDemoService(snapshot, connected);
   const state = $("link-state");
   state.className = "state" + (connected && !offline ? "" : " muted");
   const labels = {

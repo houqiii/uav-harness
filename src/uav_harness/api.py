@@ -10,7 +10,7 @@ from typing import Annotated
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import Field
+from pydantic import Field, field_validator
 from .compiler import COMPILATION_DEADLINE_S, DEFAULT_DEEPSEEK_MODEL, DEEPSEEK_ENDPOINT, DeepSeekCompiler, planning_context
 from .contracts import Action, Contract, Plan
 from .errors import HarnessError, Uncertain
@@ -20,6 +20,15 @@ from .runtime import Harness
 class Intent(Contract):
     query: str = Field(min_length=1, max_length=10000)
     execute: bool = False
+
+
+class DemoRequest(Intent):
+    @field_validator('query')
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError('请输入搜索任务')
+        return value.strip()
 
 
 RequestKey = Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=100)]
@@ -134,7 +143,21 @@ def create_app(settings, compiler=None, *, offline=False):
     async def preview_stream(body: Intent, request_key: RequestKey):
         if body.execute:
             raise HarnessError("streaming endpoint previews only; execution disabled")
-        harness = app.state.harness
+        async def produce(progress):
+            plan = await compiler.compile(body.query, app.state.harness, on_progress=progress)
+            return {'plan': plan.model_dump()}
+        return proposal_stream(produce)
+
+    @app.post('/v1/demo/preview-stream')
+    async def preview_demo(body: DemoRequest):
+        if body.execute:
+            raise HarnessError('demo previews only; execution disabled')
+        async def produce(progress):
+            demo = await compiler.compile_demo(body.query, on_progress=progress)
+            return {'demo': demo}
+        return proposal_stream(produce)
+
+    def proposal_stream(produce):
 
         async def events():
             updates = asyncio.Queue(maxsize=8)
@@ -149,8 +172,7 @@ def create_app(settings, compiler=None, *, offline=False):
 
             async def compile_plan():
                 try:
-                    plan = await compiler.compile(body.query, harness, on_progress=progress)
-                    return {"type": "done", "executed": False, "plan": plan.model_dump()}
+                    return {"type": "done", "executed": False, **await produce(progress)}
                 except HarnessError as exc:
                     return {"type": "error", "error": str(exc)}
 
