@@ -10,7 +10,7 @@ from .payload import PayloadTelemetry
 
 
 FLIGHT_ACTIONS = {"vehicle.arm", "vehicle.disarm", "flight.takeoff",
-                  "flight.move_relative", "flight.hold", "flight.land"}
+                  "flight.move_relative", "flight.hold", "flight.land", "flight.yaw"}
 BENCH_ACTIONS = {"vehicle.arm", "vehicle.disarm", "flight.land",
                  "bench.motor_test", "bench.takeoff_probe"}
 

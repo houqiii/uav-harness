@@ -30,6 +30,7 @@ class ProtocolSimulator:
         self.target = list(self.position)
         self.velocity = [0., 0., 0.]
         self.yaw = 0.
+        self.target_yaw = None
         self.landing = False
         self.motor_until = 0
         self.motor_pwm = 1231
@@ -110,6 +111,7 @@ class ProtocolSimulator:
                     self.setpoint_hz_start = self.setpoint_hz_start or time.monotonic()
                     if self.config.backend == "ardupilot" and self.main == 4 or self.config.backend == "px4" and self.main == 6:
                         self.target = [msg.x, msg.y, msg.z]
+                        self.target_yaw = msg.yaw
 
     def home(self):
         self.tx.home_position_send(300000000, 1200000000, 100000, 0, 0, 0, [1,0,0,0], 0, 0, 0)
@@ -127,6 +129,9 @@ class ProtocolSimulator:
                 step = max(-.1, min(.1, delta))
                 self.position[i] += step
                 self.velocity[i] = step/.05
+            if self.target_yaw is not None:
+                yaw_delta=(self.target_yaw-self.yaw+math.pi)%(2*math.pi)-math.pi
+                self.yaw+=max(-.08,min(.08,yaw_delta))
             if self.landing and abs(self.position[2]) < .01:
                 self.armed, self.landing, self.probe = False, False, False
             if not self.stop_telemetry:

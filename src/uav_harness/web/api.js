@@ -25,6 +25,7 @@ export const actionLabels = {
   "flight.land": "降落",
   "flight.move_relative": "相对移动",
   "flight.hold": "悬停",
+  "flight.yaw": "调整航向",
 };
 export const activeJob = (job) =>
   ["queued", "running", "cancelling"].includes(job.status);

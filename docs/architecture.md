@@ -1,5 +1,7 @@
 # 架构与扩展
 
+主工作区使用单一 Qwen VLM 的在线观测—规划—执行闭环，组件、几何约束及实机端口见 [VLM 在线任务](vlm-brain.md)。VLM 每轮选择一个工具调用，复用下面的 Harness 与飞控适配层；机群状态和设备能力随观测输入模型。下图的 DeepSeekCompiler 是保留的旧指令工作台入口。
+
 ```mermaid
 flowchart LR
     U[HTTP / CLI 用户指令] --> C[DeepSeekCompiler]

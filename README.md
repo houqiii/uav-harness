@@ -1,21 +1,20 @@
 # UAV Harness
 
-自然语言 → DeepSeek 结构化计划 → Harness 调度 → ArduPilot / PX4 后端 → MAVLink → 飞控。独立 Python 项目，支持串口直连、UDP 路由、HTTP 原子动作接口和异构飞机 DAG 调度；QGroundControl 是可选监控端。
+主路径：自然语言 + 相机图像 + 遥测 → **一个 Qwen VLM 在线规划** → 几何与能力校验 → Harness / ArduPilot / PX4 执行 → 新观测反馈。独立 Python 项目，支持无硬件几何仿真和真实设备端口；旧 DeepSeek 指令编译工作台兼容保留。
 
 当前面向多旋翼。ArduCopter 4.5 模型机的普通解锁、无 GPS 垂直起飞命令和电机响应已有现场证据。PX4 1.16 的命令映射、Offboard 预发送和异构调度通过真实 MAVLink 报文的协议测试对端验证，**尚未完成 PX4 固件 SITL 或实机飞行验收**。内置 simulator 是软件协议测试对端。
 
 ## 快速运行
 
-网页控制台：左侧一句话翻译、计划预览和调度记录，右上实时遥测，右下云台视频与姿态。
+网页标题为“无人机群意图控制系统”，主工作区提供 VLM 在线任务、决策/执行记录、遥测、相机画面与姿态。
 
 ```bash
-bash scripts/mac-dashboard.sh
-# 打开 http://127.0.0.1:8080；无串口自动进入离线推演
-# 仅测试真实 LLM 输出：bash scripts/mac-dashboard.sh --offline
-# 测试协议执行回执：bash scripts/mac-dashboard.sh --mock
+export DASHSCOPE_API_KEY='自己的百炼官方密钥'
+bash scripts/mac-dashboard.sh --offline
+# 打开 http://127.0.0.1:8080；无需串口，真实请求 Qwen VLM
 ```
 
-自然语言复用后端 DeepSeek 配置；未配置时可使用明确标注的固定测试计划。视频在“连接设置”填写 HTTP 视频地址，未接入的云台显示实际缺失状态。无需 Node/npm，HTML/JS/CSS 随 Python 包提供。详见 [网页控制台](docs/web-console.md)。
+没有密钥仍能打开页面和采集观测；模型失败明确报错。本次账户请求返回 `Arrearage`，尚未验证真实多轮视觉决策。实机接入和闭环边界见 [VLM 在线闭环](docs/vlm-brain.md)，旧 DeepSeek/模型机操作见 [网页控制台](docs/web-console.md)。无需 Node/npm。
 
 另一台 Mac 插上已调通的模型机后，可直接运行交互终端：
 
@@ -69,7 +68,7 @@ curl -s http://127.0.0.1:8080/v1/actions \
   -d '{"action_id":"motor","vehicle_id":"model-1","action":"bench.motor_test","params":{"motor_sequence":1,"pwm_us":1231,"duration_s":5},"timeout_s":20}'
 ```
 
-统一动作包括 `vehicle.arm`、`vehicle.disarm`、`flight.takeoff`、`flight.move_relative`、`flight.hold`、`flight.land`。模型机只开放 arm/disarm/land 和 `bench.motor_test`、`bench.takeoff_probe`，不开放位置飞行。`bench.takeoff_probe` 自带解锁、Land、解除武装和恢复初始模式，**完成表示指令与输出遥测证据，不表示达到起飞高度**。
+统一动作包括 `vehicle.arm`、`vehicle.disarm`、`flight.takeoff`、`flight.move_relative`、`flight.yaw`、`flight.hold`、`flight.land`。模型机只开放 arm/disarm/land 和 `bench.motor_test`、`bench.takeoff_probe`，不开放位置飞行。`bench.takeoff_probe` 自带解锁、Land、解除武装和恢复初始模式，**完成表示指令与输出遥测证据，不表示达到起飞高度**。
 
 `flight.move_relative` 的坐标约定：`local_enu` 为 x 东、y 北、z 上；`body_flu` 为 x 前、y 左、z 上，使用派发时的真实航向转换并冻结目标。上升/下降用 z 正/负表示，属于位置控制，需要有效定位。
 

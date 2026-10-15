@@ -25,7 +25,7 @@
     </header>
     <nav class="view-nav" aria-label="工作区">
       <button id="demo-tab" class="view-tab selected" aria-current="page">
-        任务演练
+        VLM 在线任务
       </button>
       <button id="console-tab" class="view-tab">指令工作台</button>
       <span class="helper">PX4 飞控适配 · 载荷待接入</span>
@@ -35,50 +35,42 @@
       <div class="demo-left">
         <section class="panel demo-composer" aria-labelledby="demo-title">
           <div class="section-head">
-            <h1 id="demo-title">自然语言任务</h1>
-            <span class="state"><i></i>模拟演练</span>
+            <h1 id="demo-title">在线意图任务</h1>
+            <span id="brain-mode" class="state muted"><i></i>连接中</span>
           </div>
           <form id="demo-form" class="demo-input-row">
-            <label class="sr-only" for="demo-intent">描述搜索任务</label>
+            <label class="sr-only" for="demo-intent">任务目标</label>
             <input
               id="demo-intent"
-              maxlength="1000"
-              value="帮我找一个戴着红帽子的人"
+              maxlength="5000"
+              value="帮我找一个戴着红帽子的人，接近到观察位置后悬停"
               autocomplete="off"
             />
-            <button id="demo-parse" class="button secondary" type="submit">
-              DeepSeek 解析
+            <button id="brain-preview" class="button secondary" type="button">
+              采集观测
             </button>
-            <button id="demo-start" class="button primary" type="button">
-              <svg viewBox="0 0 16 16" aria-hidden="true">
-                <path d="m5 2 9 6-9 6Z" fill="currentColor" /></svg
-              >开始演练
+            <button id="demo-start" class="button primary" type="submit">
+              启动闭环
             </button>
           </form>
           <div class="demo-helper-row">
-            <p id="demo-source" class="helper">固定任务模板 · 未调用模型</p>
-            <button id="demo-cancel-parse" class="text-button" hidden>
-              停止解析
-            </button>
-            <p class="demo-disclosure">
-              模拟演练 · 不连接飞控 · 视觉结果为预设数据
-            </p>
+            <p id="demo-source" class="helper">正在读取 VLM 和设备状态…</p>
           </div>
           <p id="demo-error" class="error-copy" role="alert" hidden></p>
           <details class="demo-plan-details">
-            <summary>查看任务配置与解析结果</summary>
+            <summary>任务约束与设备能力</summary>
             <pre id="demo-plan" class="code-box"></pre>
           </details>
         </section>
         <ol
           id="demo-stages"
           class="panel demo-stages"
-          aria-label="任务阶段"
+          aria-label="在线决策闭环"
         ></ol>
         <section class="panel scan-panel" aria-labelledby="scan-title">
           <div class="section-head">
-            <h2 id="scan-title">环视扫描</h2>
-            <span id="demo-scan-count" class="helper">等待开始 · 0 / 12</span>
+            <h2 id="scan-title">搜索与目标状态</h2>
+            <span id="demo-scan-count" class="helper">尚无观测</span>
           </div>
           <div class="scan-body">
             <div class="compass-wrap">
@@ -86,18 +78,18 @@
                 id="demo-compass"
                 viewBox="0 0 320 320"
                 role="img"
-                aria-label="360度环视扫描方位盘"
+                aria-label="实际观测方位盘"
               ></svg>
             </div>
             <div class="target-summary">
               <span id="demo-phase" class="phase-label" role="status"
                 >等待任务</span
               >
-              <h3>戴红帽子的人</h3>
+              <h3 id="brain-target-name">目标待识别</h3>
               <dl class="target-facts">
                 <div>
-                  <dt>目标状态</dt>
-                  <dd id="demo-target">等待扫描</dd>
+                  <dt>识别状态</dt>
+                  <dd id="demo-target">未知</dd>
                 </div>
                 <div>
                   <dt>目标方位</dt>
@@ -108,35 +100,45 @@
                   <dd id="demo-distance">—</dd>
                 </div>
                 <div>
-                  <dt>数据来源</dt>
-                  <dd>预设结果</dd>
+                  <dt>几何误差</dt>
+                  <dd id="brain-uncertainty">—</dd>
                 </div>
               </dl>
-              <div class="approach-progress">
-                <div>
-                  <span>接近进度</span
-                  ><span id="demo-approach-label">0 / 60 m</span>
-                </div>
-                <progress
-                  id="demo-approach"
-                  max="60"
-                  value="0"
-                  aria-label="模拟接近距离"
-                ></progress>
-                <p class="helper">观察位置：水平 20 m · 保持高度</p>
-              </div>
+              <p id="brain-target-source" class="helper">
+                目标由 VLM 识别；距离由标定几何计算
+              </p>
             </div>
           </div>
           <div class="scan-frames-head">
-            <span>各角度画面</span
-            ><span class="helper">12 方向示意帧 · 点击查看</span>
+            <span>观测记录</span
+            ><span class="helper">真实采集帧与拍摄方位 · 点击查看</span>
           </div>
-          <div id="demo-frames" class="demo-frames" aria-label="扫描画面"></div>
-          <div class="scan-legend">
-            <span><i class="legend-wait"></i>等待</span
-            ><span><i class="legend-pending"></i>分析中</span
-            ><span><i class="legend-clear"></i>已检查</span
-            ><span><i class="legend-found"></i>发现候选</span>
+          <div
+            id="demo-frames"
+            class="demo-frames"
+            aria-label="已采集观测"
+          ></div>
+        </section>
+        <section
+          class="panel brain-decision-panel"
+          aria-labelledby="brain-decision-title"
+        >
+          <div class="section-head">
+            <h2 id="brain-decision-title">VLM 规划与执行反馈</h2>
+            <span id="brain-round" class="helper">第 0 轮</span>
+          </div>
+          <p id="brain-task" class="helper">
+            同一个 VLM 负责理解任务和后续在线调整
+          </p>
+          <p id="brain-evidence" class="brain-evidence">
+            每轮使用新图像、拍摄姿态、遥测和上一次动作结果。
+          </p>
+          <ol id="brain-task-plan" class="brain-task-plan"></ol>
+          <div class="brain-tool">
+            <span>本轮动作提议</span><code id="brain-action">—</code>
+          </div>
+          <div class="brain-tool">
+            <span>最近执行结果</span><code id="brain-execution">—</code>
           </div>
         </section>
         <section
@@ -144,12 +146,12 @@
           aria-labelledby="demo-events-title"
         >
           <div class="section-head">
-            <h2 id="demo-events-title">任务事件</h2>
-            <span id="demo-elapsed" class="helper">演练时间 00:00</span>
+            <h2 id="demo-events-title">闭环事件</h2>
+            <span id="demo-elapsed" class="helper">等待任务</span>
           </div>
-          <ol id="demo-events" class="demo-events" aria-live="polite"></ol>
+          <ol id="demo-events" class="demo-events"></ol>
           <p id="demo-events-empty" class="helper">
-            开始演练后，采集、分析与调度过程将在这里显示。
+            采集、模型决策、动作拒绝和执行结果将在这里显示。
           </p>
         </section>
       </div>
@@ -159,68 +161,59 @@
           aria-labelledby="demo-telemetry-title"
         >
           <div class="section-head">
-            <h2 id="demo-telemetry-title">实时遥测</h2>
-            <span class="state muted"><i></i>模拟数据</span>
+            <h2 id="demo-telemetry-title">当前遥测</h2>
+            <span id="brain-telemetry-source" class="state muted"
+              ><i></i>等待观测</span
+            >
           </div>
           <div class="demo-metrics">
             <div>
-              <span>相对起点高度</span
-              ><strong id="demo-altitude">0.0<small> m</small></strong>
+              <span>相对 Home 高度</span><strong id="demo-altitude">—</strong>
             </div>
-            <div>
-              <span>水平速度</span
-              ><strong id="demo-speed">0.0<small> m/s</small></strong>
-            </div>
-            <div>
-              <span>机头航向</span
-              ><strong id="demo-heading">000<small>°</small></strong>
-            </div>
-            <div>
-              <span>电池电量</span
-              ><strong id="demo-battery">90<small>%</small></strong>
-            </div>
+            <div><span>水平速度</span><strong id="demo-speed">—</strong></div>
+            <div><span>机头航向</span><strong id="demo-heading">—</strong></div>
+            <div><span>电池电量</span><strong id="demo-battery">—</strong></div>
           </div>
           <div class="demo-position">
-            <span id="demo-flight-mode">PX4 · 等待任务</span
-            ><span id="demo-ned">N 0.0 · E 0.0 · D 0.0 m</span>
+            <span id="demo-flight-mode">等待飞行状态</span
+            ><span id="demo-ned">N — · E — · D —</span>
           </div>
         </section>
         <section class="panel demo-camera" aria-labelledby="demo-camera-title">
           <div class="section-head">
-            <h2 id="demo-camera-title">云台画面</h2>
-            <span class="helper">演示素材 · 非实时</span>
+            <h2 id="demo-camera-title">无人机视图</h2>
+            <span id="brain-camera-source" class="helper">等待相机观测</span>
           </div>
           <div class="demo-camera-frame">
-            <img
-              id="demo-camera-image"
-              src="/assets/search-field.jpg"
-              alt="AI生成的演示场地，一位戴红帽子的人站在草地上；非实拍图像"
-            />
+            <img id="demo-camera-image" alt="当前观测图像" hidden />
+            <div id="brain-camera-empty" class="video-empty">
+              点击“采集观测”或启动闭环
+            </div>
             <div class="camera-topline">
-              <span id="demo-frame-label">演示素材预览</span><span>SIM</span>
+              <span id="demo-frame-label">尚无图像</span
+              ><span id="brain-image-age">—</span>
             </div>
             <div id="demo-box" class="demo-target-box" hidden>
-              <span>戴红帽子的人 · 预设</span>
+              <span id="brain-box-label">VLM 目标框</span>
             </div>
-            <div class="camera-crosshair" aria-hidden="true"></div>
             <div class="camera-bottomline">
-              <span id="demo-camera-caption">等待扫描</span
-              ><span id="demo-camera-source">AI 生成素材</span>
+              <span id="demo-camera-caption">未产生识别结果</span
+              ><span id="demo-camera-source">—</span>
             </div>
           </div>
           <div class="demo-gimbal-facts">
-            <div><span>俯仰</span><strong>−35°</strong></div>
+            <div><span>拍摄俯仰</span><strong id="brain-pitch">—</strong></div>
             <div>
-              <span>航向 · 地球坐标</span
-              ><strong id="demo-gimbal-heading">000°</strong>
+              <span>拍摄航向 · 地球坐标</span
+              ><strong id="demo-gimbal-heading">—</strong>
             </div>
-            <div><span>变焦</span><strong id="demo-zoom">1.0×</strong></div>
+            <div><span>帧编号</span><strong id="brain-frame-id">—</strong></div>
           </div>
-          <p class="helper camera-note">
-            云台／相机待选型 · Qwen 视觉接口待接入
+          <p id="brain-camera-note" class="helper camera-note">
+            图像与拍摄时遥测绑定，不用当前姿态替代历史拍摄姿态。
           </p>
           <button id="demo-camera-live" class="text-button" hidden>
-            返回当前演练画面
+            返回当前观测
           </button>
         </section>
         <section
@@ -228,33 +221,34 @@
           aria-labelledby="demo-controls-title"
         >
           <div class="section-head">
-            <h2 id="demo-controls-title">演练控制</h2>
-            <span class="helper">仅作用于模拟流程</span>
+            <h2 id="demo-controls-title">任务控制</h2>
+            <span id="brain-control-note" class="helper">读取设备状态中</span>
           </div>
           <div class="demo-options">
             <label
-              >演练场景<select id="demo-scenario" aria-label="演练场景">
-                <option value="found">找到目标并接近</option>
-                <option value="missing">未发现目标</option>
-                <option value="lost">接近时目标丢失</option>
-                <option value="timeout">接近时视觉超时</option>
-              </select></label
+              >执行飞机<select
+                id="brain-vehicle"
+                aria-label="执行飞机"
+              ></select></label
             ><label
-              >播放速度<select id="demo-rate" aria-label="播放速度">
-                <option value="1">1×</option>
-                <option value="3">3×</option>
-                <option value="6">6×</option>
+              >任务目标<select id="brain-objective" aria-label="任务目标">
+                <option value="auto">按自然语言理解</option>
+                <option value="approach">接近观察</option>
+                <option value="find">仅寻找</option>
               </select></label
             >
           </div>
           <div class="demo-control-buttons">
             <button id="demo-pause" class="button secondary" disabled>
-              暂停演练</button
-            ><button id="demo-reset" class="button secondary">重置演练</button>
+              暂停并悬停</button
+            ><button id="demo-reset" class="button secondary" disabled>
+              结束任务
+            </button>
           </div>
           <p id="demo-result" class="helper">
-            预设流程：50 m 高度 → 12 方向扫描 → 确认 → 分段接近 → 悬停
+            VLM 每次只提出一个短动作；收到执行结果后重新观察和规划。
           </p>
+          <p id="brain-provider" class="helper camera-note"></p>
         </section>
       </aside>
     </main>
@@ -491,7 +485,7 @@
       指令与遥测由本地 Harness 提供<span id="control-mode"></span>
     </footer>
     <footer id="demo-footer">
-      模拟飞行与预设视觉结果 · 不发送飞控指令 · DeepSeek 解析需单独触发
+      VLM 统一理解与在线规划 · 几何计算与设备执行独立验证 · 无预设目标识别结果
     </footer>
     <dialog id="settings-dialog">
       <form id="settings-form">

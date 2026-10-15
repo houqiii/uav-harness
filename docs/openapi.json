@@ -95,6 +95,9 @@
                     "$ref": "#/components/schemas/Land"
                   },
                   {
+                    "$ref": "#/components/schemas/Yaw"
+                  },
+                  {
                     "$ref": "#/components/schemas/MotorTest"
                   },
                   {
@@ -110,6 +113,7 @@
                     "flight.move_relative": "#/components/schemas/Move",
                     "flight.hold": "#/components/schemas/Hold",
                     "flight.land": "#/components/schemas/Land",
+                    "flight.yaw": "#/components/schemas/Yaw",
                     "bench.motor_test": "#/components/schemas/MotorTest",
                     "bench.takeoff_probe": "#/components/schemas/TakeoffProbe"
                   }
@@ -434,6 +438,296 @@
           }
         }
       }
+    },
+    "/v1/demo/preview-stream": {
+      "post": {
+        "summary": "Preview Demo",
+        "operationId": "preview_demo_v1_demo_preview_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain": {
+      "get": {
+        "summary": "Brain Metadata",
+        "operationId": "brain_metadata_v1_brain_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain/missions": {
+      "post": {
+        "summary": "Start Mission",
+        "operationId": "start_mission_v1_brain_missions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MissionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain/missions/{mid}": {
+      "get": {
+        "summary": "Get Mission",
+        "operationId": "get_mission_v1_brain_missions__mid__get",
+        "parameters": [
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain/missions/{mid}/{action}": {
+      "post": {
+        "summary": "Control Mission",
+        "operationId": "control_mission_v1_brain_missions__mid___action__post",
+        "parameters": [
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mid"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Action"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain/missions/{mid}/frames/{fid}": {
+      "get": {
+        "summary": "Mission Image",
+        "operationId": "mission_image_v1_brain_missions__mid__frames__fid__get",
+        "parameters": [
+          {
+            "name": "mid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Mid"
+            }
+          },
+          {
+            "name": "fid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Fid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain/preview": {
+      "post": {
+        "summary": "Preview Observation",
+        "operationId": "preview_observation_v1_brain_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/brain/preview/{vid}/image": {
+      "get": {
+        "summary": "Preview Image",
+        "operationId": "preview_image_v1_brain_preview__vid__image_get",
+        "parameters": [
+          {
+            "name": "vid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Vid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -488,6 +782,27 @@
           "action"
         ],
         "title": "Arm"
+      },
+      "DemoRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "execute": {
+            "type": "boolean",
+            "title": "Execute",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "DemoRequest"
       },
       "Disarm": {
         "properties": {
@@ -699,6 +1014,53 @@
         ],
         "title": "Land"
       },
+      "MissionRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Query"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "objective": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "find",
+              "approach"
+            ],
+            "title": "Objective",
+            "default": "auto"
+          },
+          "simulation_seed": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 4294967295.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simulation Seed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "query",
+          "vehicle_id"
+        ],
+        "title": "MissionRequest"
+      },
       "MotorParams": {
         "properties": {
           "motor_sequence": {
@@ -899,6 +1261,9 @@
                   "$ref": "#/components/schemas/Land"
                 },
                 {
+                  "$ref": "#/components/schemas/Yaw"
+                },
+                {
                   "$ref": "#/components/schemas/MotorTest"
                 },
                 {
@@ -914,6 +1279,7 @@
                   "flight.land": "#/components/schemas/Land",
                   "flight.move_relative": "#/components/schemas/Move",
                   "flight.takeoff": "#/components/schemas/Takeoff",
+                  "flight.yaw": "#/components/schemas/Yaw",
                   "vehicle.arm": "#/components/schemas/Arm",
                   "vehicle.disarm": "#/components/schemas/Disarm"
                 }
@@ -931,6 +1297,22 @@
           "actions"
         ],
         "title": "Plan"
+      },
+      "PreviewRequest": {
+        "properties": {
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Vehicle Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "vehicle_id"
+        ],
+        "title": "PreviewRequest"
       },
       "ProbeParams": {
         "properties": {
@@ -1104,6 +1486,74 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "Yaw": {
+        "properties": {
+          "action_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Action Id"
+          },
+          "vehicle_id": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Vehicle Id"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_.-]+$"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "timeout_s": {
+            "type": "number",
+            "maximum": 300.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Timeout S",
+            "default": 60
+          },
+          "action": {
+            "type": "string",
+            "const": "flight.yaw",
+            "title": "Action"
+          },
+          "params": {
+            "$ref": "#/components/schemas/YawParams"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "action_id",
+          "vehicle_id",
+          "action",
+          "params"
+        ],
+        "title": "Yaw"
+      },
+      "YawParams": {
+        "properties": {
+          "heading_deg": {
+            "type": "number",
+            "exclusiveMaximum": 360.0,
+            "minimum": 0.0,
+            "title": "Heading Deg"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "heading_deg"
+        ],
+        "title": "YawParams"
       }
     }
   }

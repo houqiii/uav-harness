@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 from pydantic import Field, model_validator
 from .contracts import Contract, Id
+from .brain.settings import BrainConfig
 
 
 class LinkConfig(Contract):
@@ -59,6 +60,7 @@ class Settings(Contract):
     api_host: str = "127.0.0.1"
     api_port: int = Field(default=8080, ge=1024, le=65535)
     state_dir: Path = Path("state")
+    brain: BrainConfig = Field(default_factory=BrainConfig)
 
     @model_validator(mode="after")
     def identities(self):
@@ -69,6 +71,8 @@ class Settings(Contract):
             raise ValueError("duplicate link, vehicle or target identity")
         if any(v.link not in names or v.system_id == self.source_system for v in self.vehicles):
             raise ValueError("unknown link or GCS/vehicle system ID collision")
+        if any(c.vehicle_id not in ids for c in self.brain.cameras):
+            raise ValueError('brain camera references unknown vehicle')
         endpoints = [(x.bind_host, x.bind_port) for x in self.links if x.kind != "serial" and x.bind_port]
         devices = [x.device for x in self.links if x.kind == "serial"]
         if len(set(endpoints)) != len(endpoints) or len(set(devices)) != len(devices):

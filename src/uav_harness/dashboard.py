@@ -34,7 +34,7 @@ def main():
     parser.add_argument('--board-id', type=int, default=1010)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--mock', action='store_true', help='启动协议模拟对端，无实机连接')
-    mode.add_argument('--offline', action='store_true', help='仅调用真实 LLM 生成计划，不打开任何飞控链路')
+    mode.add_argument('--offline', action='store_true', help='VLM 在线规划与几何仿真，不打开任何飞控链路')
     parser.add_argument('--observe', action='store_true', help='只读观察，禁止控制')
     parser.add_argument('--http-port', type=int, default=None)
     parser.add_argument('--state-dir', type=Path, default=Path('state/bench-console'))
@@ -63,7 +63,7 @@ def main():
         if args.http_port is not None:
             settings.api_port = args.http_port
         kinds = {link.kind for link in settings.links}
-        print('离线推演：真实 LLM 翻译和能力校验；不打开飞控链路，不发送指令。' if offline else
+        print('无硬件模式：Qwen VLM 在线规划＋几何相机／运动学仿真；不打开飞控链路，不发送 MAVLink 指令。' if offline else
               '协议模拟：所有响应均不代表实机效果。' if kinds == {'simulator'} else
               '实机链路：网页点击执行后才派发控制动作。', flush=True)
         print(f'网页控制台：http://{settings.api_host}:{settings.api_port}', flush=True)

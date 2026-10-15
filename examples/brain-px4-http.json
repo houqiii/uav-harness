@@ -1,0 +1,25 @@
+{
+  "allow_control": false,
+  "state_dir": "state/brain-px4-http",
+  "links": [{"name": "px4-link", "kind": "udp", "bind_port": 14540}],
+  "vehicles": [{
+    "vehicle_id": "px4-1", "link": "px4-link", "backend": "px4", "profile": "flight",
+    "system_id": 1, "component_id": 1, "firmware": [1, 16],
+    "max_height_m": 80, "max_relative_distance_m": 10
+  }],
+  "brain": {
+    "allow_hardware_control": false,
+    "horizontal_space_cleared": false,
+    "policy": {"search_altitude_m": 50, "min_altitude_m": 10, "max_altitude_m": 80,
+      "max_step_m": 10, "stand_off_m": 20, "max_radius_m": 250},
+    "cameras": [{
+      "vehicle_id": "px4-1", "snapshot_url": "http://127.0.0.1:8090/snapshot.jpg",
+      "width": 1920, "height": 1080, "fx": 1600, "fy": 1600, "cx": 960, "cy": 540,
+      "mount_pitch_deg": -35, "mount_yaw_deg": 0, "mount_roll_deg": 0,
+      "offset_body_frd": [0, 0, 0],
+      "ground_down_m": null, "ground_uncertainty_m": 2,
+      "timestamp_header": "X-Capture-Timestamp", "trust_receipt_time": false,
+      "gimbal_device_id": null
+    }]
+  }
+}

@@ -40,6 +40,8 @@ class Adapter(ABC):
             await self.move(action.params)
         elif name == "flight.hold":
             await self.hold(action.params.duration_s)
+        elif name == 'flight.yaw':
+            await self.yaw(action.params.heading_deg)
         elif name == "flight.land":
             await self.land()
         elif name == "bench.motor_test":
@@ -67,6 +69,11 @@ class Adapter(ABC):
             await s.command(400, [1, 0])
             await s.wait(s.armed, 3)
         await s.command(22, self.takeoff_values(altitude, home))
+        if s.config.backend == "px4":
+            # Initial MANUAL is permitted only until automatic takeoff is observed.
+            # Keeping it thereafter would let cleanup override a pilot takeover.
+            await s.wait(lambda: s.mode() in {(4, 2), (4, 3)}, 3)
+            s.allowed_modes = {(4, 2), (4, 3)}
         await self.wait_target(target)
         await s.wait(lambda: s.get("EXTENDED_SYS_STATE").landed_state == mav.MAV_LANDED_STATE_IN_AIR, 3)
 
@@ -110,6 +117,17 @@ class Adapter(ABC):
             raise HarnessError("hold requires airborne/armed")
         await self.movement_mode(position, self.s.yaw())
         await self.wait_target(position, duration)
+
+    async def yaw(self, heading_deg):
+        s=self.s
+        position,_=s.position()
+        if not s.armed() or s.grounded():
+            raise HarnessError('yaw requires airborne/armed')
+        target=math.radians(heading_deg)
+        await self.movement_mode(position,s.yaw())
+        s.target=(position,target)
+        await s.wait(lambda: abs((s.yaw()-target+math.pi)%(2*math.pi)-math.pi)<math.radians(2),45,stable_s=.5)
+        await self.wait_target(position)
 
     async def land(self):
         s = self.s

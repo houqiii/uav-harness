@@ -20,6 +20,7 @@ class Harness:
         self.jobs, self.cancel_flags, self.leases, self.current = {}, {}, {}, {}
         self.lock = asyncio.Lock()
         self.closed = False
+        self.mission_owners = {}
         for link in settings.links:
             targets = {(v.system_id, v.component_id): 3 if v.backend == "ardupilot" else 12
                        for v in settings.vehicles if v.link == link.name}
@@ -62,7 +63,21 @@ class Harness:
                 raise HarnessError("unknown vehicle")
             self.adapters[action.vehicle_id].validate(action)
 
-    async def submit(self, plan, request_key):
+    async def reserve(self, vehicle_id, owner):
+        async with self.lock:
+            if vehicle_id not in self.sessions:
+                raise HarnessError('unknown vehicle')
+            if vehicle_id in self.leases or vehicle_id in self.mission_owners:
+                raise HarnessError('vehicle already owned by an active job or mission')
+            if vehicle_id in self.journal.unknown_vehicles():
+                raise Uncertain('unresolved prior outcome; reconcile before mission')
+            self.mission_owners[vehicle_id]=owner
+
+    def release(self, vehicle_id, owner):
+        if self.mission_owners.get(vehicle_id)==owner:
+            self.mission_owners.pop(vehicle_id,None)
+
+    async def submit(self, plan, request_key, *, mission_owner=None):
         self.validate(plan)
         async with self.lock:
             # Replay lookup precedes admission, so repeat HTTP requests don't compete with their own lease.
@@ -73,6 +88,8 @@ class Harness:
             if not self.settings.allow_control:
                 raise HarnessError("service is configured for observation only")
             vehicles = {a.vehicle_id for a in plan.actions}
+            if any(v in self.mission_owners and self.mission_owners[v]!=mission_owner for v in vehicles):
+                raise HarnessError('vehicle owned by an active VLM mission')
             if vehicles & self.leases.keys():
                 raise HarnessError("vehicle owned by an active job")
             if vehicles & self.journal.unknown_vehicles():

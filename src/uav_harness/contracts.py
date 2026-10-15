@@ -31,6 +31,10 @@ class HoldParams(Contract):
     duration_s: Seconds
 
 
+class YawParams(Contract):
+    heading_deg: float = Field(ge=0, lt=360)
+
+
 class MotorParams(Contract):
     motor_sequence: int = Field(default=1, ge=1, le=8, strict=True)
     pwm_us: int = Field(default=1231, ge=1000, le=1300, strict=True)
@@ -84,6 +88,11 @@ class Land(ActionBase):
     params: Empty = Field(default_factory=Empty)
 
 
+class Yaw(ActionBase):
+    action: Literal['flight.yaw']
+    params: YawParams
+
+
 class MotorTest(ActionBase):
     action: Literal["bench.motor_test"]
     params: MotorParams = Field(default_factory=MotorParams)
@@ -94,7 +103,7 @@ class TakeoffProbe(ActionBase):
     params: ProbeParams = Field(default_factory=ProbeParams)
 
 
-Action = Annotated[Union[Arm, Disarm, Takeoff, Move, Hold, Land, MotorTest, TakeoffProbe],
+Action = Annotated[Union[Arm, Disarm, Takeoff, Move, Hold, Land, Yaw, MotorTest, TakeoffProbe],
                    Field(discriminator="action")]
 
 
