@@ -1,0 +1,398 @@
+import {
+  $,
+  element,
+  request,
+  notice,
+  actionLabels,
+  jobLabels,
+  activeJob,
+} from "./api.js";
+let data = null,
+  online = false,
+  plan = null,
+  origin = "",
+  compiling = false,
+  submitting = false,
+  requestKey = null,
+  submitted = false,
+  selectedJob = null,
+  selectedDetail = null,
+  jobIds = "",
+  previewVersion = 0;
+const storageKey = "uav.pendingSubmission";
+const name = (action) => actionLabels[action.action] || action.action;
+function renderPlan() {
+  const target = $("plan-content");
+  target.replaceChildren();
+  if (!plan)
+    target.append(element("p", "empty-copy", "输入任务，生成可执行的调度计划"));
+  else
+    for (const [index, action] of plan.actions.entries()) {
+      const row = element("div", "plan-row");
+      row.append(
+        element("span", "plan-number", String(index + 1).padStart(2, "0")),
+      );
+      const detail = element("div");
+      detail.append(element("strong", "", name(action)));
+      const p = action.params;
+      const params =
+        action.action === "bench.motor_test"
+          ? `${p.pwm_us} μs · ${p.duration_s} s · 电机 ${p.motor_sequence}`
+          : Object.entries(p)
+              .map(([k, v]) => `${k}=${v}`)
+              .join(" · ");
+      detail.append(
+        element(
+          "p",
+          "",
+          `${action.vehicle_id}${params ? " · " + params : ""}${action.depends_on.length ? " · 依赖 " + action.depends_on.join(", ") : ""}`,
+        ),
+      );
+      row.append(detail);
+      target.append(row);
+    }
+  $("plan-json").textContent = plan ? JSON.stringify(plan, null, 2) : "";
+  $("plan-source").textContent = origin;
+  $("json-button").disabled = !plan;
+  $("step-intent").classList.toggle("complete", Boolean(plan));
+  $("step-validate").classList.toggle("complete", Boolean(plan));
+  $("step-dispatch").classList.toggle("complete", submitted);
+  updateButtons();
+}
+function updateButtons() {
+  const ready =
+    online &&
+    data?.control_enabled &&
+    plan?.actions.every(
+      (a) =>
+        data.vehicles.find((v) => v.vehicle_id === a.vehicle_id)?.connected,
+    );
+  $("intent").disabled = submitting || Boolean(requestKey && !submitted);
+  $("execute-button").disabled = !ready || submitting || submitted || compiling;
+  $("execute-button").textContent = submitting
+    ? "正在提交…"
+    : submitted
+      ? "已提交调度"
+      : requestKey
+        ? "查询 / 重试本次提交"
+        : "执行计划";
+  $("compile-button").disabled =
+    compiling ||
+    submitting ||
+    Boolean(requestKey && !submitted) ||
+    !online ||
+    !data?.compiler.configured;
+  $("compile-button").textContent = compiling ? "正在翻译…" : "生成调度计划";
+  document
+    .querySelectorAll("[data-example]")
+    .forEach(
+      (b) =>
+        (b.disabled =
+          compiling ||
+          submitting ||
+          Boolean(requestKey && !submitted) ||
+          !online),
+    );
+}
+function invalidatePlan() {
+  previewVersion++;
+  plan = null;
+  origin = "";
+  requestKey = null;
+  submitted = false;
+  $("plan-json").hidden = true;
+  $("json-button").setAttribute("aria-expanded", "false");
+  renderPlan();
+}
+export function updateWorkspace(snapshot, connected) {
+  data = snapshot;
+  online = connected;
+  $("compiler-note").textContent = !online
+    ? "服务断开，等待重新连接"
+    : data.compiler.configured
+      ? "DeepSeek 已配置 · 生成计划后可查看并执行"
+      : "DeepSeek 未配置：自然语言翻译暂不可用；快捷示例可生成固定测试计划。";
+  const jobs = data?.jobs || [];
+  if (requestKey) {
+    const found = jobs.find((j) => j.request_key === requestKey);
+    if (found) {
+      submitted = true;
+      requestKey = null;
+      sessionStorage.removeItem(storageKey);
+      selectedJob = found.job_id;
+      renderPlan();
+    }
+  }
+  const signature = JSON.stringify(jobs.map((j) => [j.job_id, j.status]));
+  if (signature !== jobIds) {
+    jobIds = signature;
+    renderJobs(jobs);
+  }
+  if (!selectedJob && jobs.length) {
+    selectedJob = jobs[0].job_id;
+    renderJobs(jobs);
+  }
+  $("job-empty").hidden = jobs.length > 0;
+  $("job-count").textContent = jobs.length ? `最近 ${jobs.length} 项` : "";
+  $("job-detail").hidden = !selectedJob;
+  $("cancel-button").disabled =
+    !online ||
+    !selectedDetail ||
+    !activeJob(selectedDetail) ||
+    selectedDetail.status === "cancelling";
+  $("reconcile-button").disabled = !online;
+  updateButtons();
+}
+function renderJobs(jobs) {
+  $("job-list").replaceChildren(
+    ...jobs.map((job) => {
+      const button = element(
+        "button",
+        "job-item" + (selectedJob === job.job_id ? " selected" : ""),
+      );
+      const title = element(
+        "span",
+        "job-title",
+        job.plan.query || job.plan.actions.map(name).join(" → "),
+      );
+      title.append(
+        element(
+          "span",
+          "job-time",
+          new Date(job.created * 1000).toLocaleTimeString("zh-CN", {
+            hour12: false,
+          }) +
+            " · " +
+            job.plan.actions.length +
+            " 个动作",
+        ),
+      );
+      button.append(
+        title,
+        element(
+          "span",
+          "job-badge " + job.status,
+          jobLabels[job.status] || job.status,
+        ),
+      );
+      button.onclick = () => {
+        selectedJob = job.job_id;
+        selectedDetail = null;
+        renderJobs(data.jobs);
+        pollJob().catch((e) => notice(e.message));
+      };
+      return button;
+    }),
+  );
+}
+export async function pollJob() {
+  if (!online || !selectedJob) return;
+  const id = selectedJob,
+    detail = await request(`/v1/jobs/${encodeURIComponent(id)}`);
+  if (id !== selectedJob) return;
+  selectedDetail = detail;
+  $("job-detail").hidden = false;
+  $("job-status").textContent =
+    `${jobLabels[detail.status] || detail.status} · ${detail.job_id.slice(0, 16)}`;
+  $("cancel-button").hidden = !activeJob(detail);
+  $("reconcile-button").hidden = detail.status !== "unknown";
+  $("cancel-button").disabled = !online || detail.status === "cancelling";
+  const lines = [];
+  for (const event of detail.events || []) {
+    const at = new Date(event.at * 1000).toLocaleTimeString("zh-CN", {
+      hour12: false,
+    });
+    if (event.kind === "command_sent")
+      lines.push(
+        `[${at}] TX  command=${event.command} params=${JSON.stringify(event.params)}`,
+      );
+    else if (event.kind === "command_ack")
+      lines.push(
+        `[${at}] ACK command=${event.message.command} result=${event.message.result} (${event.message.result === 0 ? "ACCEPTED" : "未接受"})`,
+      );
+    else if (event.error) lines.push(`[${at}] ${event.kind}: ${event.error}`);
+  }
+  for (const action of detail.plan.actions) {
+    const result = detail.results[action.action_id];
+    if (result)
+      lines.push(
+        `${action.action_id} · ${jobLabels[result.status] || result.status}${result.error ? " · " + result.error : ""}${result.physical_rotation_verified === false ? " · 已验证输出遥测，物理转动需现场观察" : ""}`,
+      );
+  }
+  if (detail.status === "unknown")
+    lines.push(
+      "结果不确定：未自动重试。请核实设备状态并按项目流程 reconcile。",
+    );
+  $("job-events").replaceChildren(
+    ...lines
+      .slice(-100)
+      .map((line) =>
+        element(
+          "div",
+          "event-line" + (/不确定|失败|error/.test(line) ? " error" : ""),
+          line,
+        ),
+      ),
+  );
+}
+export function initWorkspace() {
+  $("reconcile-button").onclick = async () => {
+    if (!selectedJob) return;
+    $("reconcile-button").disabled = true;
+    try {
+      await request(`/v1/jobs/${encodeURIComponent(selectedJob)}/reconcile`, {
+        method: "POST",
+      });
+      notice(
+        "已核实新鲜地面 / 未解锁状态，原任务未重放；若曾丢失 ACK，请重启服务后再复用该命令。",
+        true,
+      );
+      await pollJob();
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      $("reconcile-button").disabled = !online;
+    }
+  };
+  $("intent").addEventListener("input", () => {
+    invalidatePlan();
+    notice("");
+  });
+  $("json-button").onclick = () => {
+    const open = $("plan-json").hidden;
+    $("plan-json").hidden = !open;
+    $("json-button").setAttribute("aria-expanded", String(open));
+  };
+  $("intent-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const query = $("intent").value.trim();
+    if (!query || compiling) return;
+    invalidatePlan();
+    const version = previewVersion;
+    compiling = true;
+    updateButtons();
+    notice("");
+    try {
+      const result = await request("/v1/intents", {
+        body: { query, execute: false },
+        key: crypto.randomUUID(),
+        timeout: 55000,
+      });
+      if (version === previewVersion) {
+        plan = result.plan;
+        origin = "DeepSeek 翻译 · 能力校验通过";
+        renderPlan();
+      }
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      compiling = false;
+      updateButtons();
+    }
+  };
+  document.querySelectorAll("[data-example]").forEach(
+    (button) =>
+      (button.onclick = async () => {
+        const vehicle = data?.vehicles.find(
+          (v) => v.vehicle_id === $("vehicle-select").value,
+        );
+        if (!vehicle || vehicle.profile !== "model_bench") {
+          notice("这两个示例适用于模型机；请选择 model_bench 机型。");
+          return;
+        }
+        const motor = button.dataset.example === "motor";
+        const query = motor
+          ? `让 ${vehicle.vehicle_id} 的 1 号电机以 1231 微秒转动 5 秒`
+          : `对 ${vehicle.vehicle_id} 进行 1.5 米起飞指令探针测试，并完成降落收尾`;
+        $("intent").value = query;
+        invalidatePlan();
+        notice("");
+        if (data.compiler.configured) return;
+        const version = previewVersion;
+        const candidate = {
+          query,
+          actions: [
+            {
+              action_id: motor ? "motor" : "probe",
+              vehicle_id: vehicle.vehicle_id,
+              action: motor ? "bench.motor_test" : "bench.takeoff_probe",
+              params: motor
+                ? { motor_sequence: 1, pwm_us: 1231, duration_s: 5 }
+                : { altitude_home_m: 1.5 },
+              depends_on: [],
+              timeout_s: motor ? 20 : 60,
+            },
+          ],
+        };
+        try {
+          const response = await request("/v1/plans/validate", {
+            body: candidate,
+          });
+          if (version === previewVersion) {
+            plan = response.plan;
+            origin = "固定测试计划 · 未调用模型";
+            renderPlan();
+          }
+        } catch (error) {
+          notice(error.message);
+        }
+      }),
+  );
+  $("execute-button").onclick = async () => {
+    if (!plan || submitting || submitted) return;
+    requestKey ||= crypto.randomUUID();
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify({ plan, key: requestKey }),
+    );
+    submitting = true;
+    updateButtons();
+    notice("");
+    try {
+      const job = await request("/v1/plans", { body: plan, key: requestKey });
+      submitted = true;
+      sessionStorage.removeItem(storageKey);
+      selectedJob = job.job_id;
+      selectedDetail = job;
+      renderPlan();
+      notice("计划已提交，正在跟踪飞控回执和遥测结果。", true);
+    } catch (error) {
+      if (error.status) {
+        requestKey = null;
+        sessionStorage.removeItem(storageKey);
+        notice(error.message);
+      } else
+        notice(
+          "提交响应未确认。可点击“查询 / 重试本次提交”，系统将使用同一幂等键，不重复派发已接收任务。",
+        );
+    } finally {
+      submitting = false;
+      updateButtons();
+    }
+  };
+  $("cancel-button").onclick = async () => {
+    if (!selectedJob) return;
+    $("cancel-button").disabled = true;
+    try {
+      await request(`/v1/jobs/${encodeURIComponent(selectedJob)}/cancel`, {
+        method: "POST",
+      });
+      notice("已请求取消，等待控制器停止或降落收尾。", true);
+      await pollJob();
+    } catch (error) {
+      notice(error.message);
+    }
+  };
+  try {
+    const pending = JSON.parse(sessionStorage.getItem(storageKey));
+    if (pending?.plan?.actions && pending.key) {
+      plan = pending.plan;
+      requestKey = pending.key;
+      $("intent").value = plan.query;
+      origin = "恢复待确认提交 · 重试沿用原幂等键";
+      renderPlan();
+    }
+  } catch {
+    sessionStorage.removeItem(storageKey);
+  }
+}

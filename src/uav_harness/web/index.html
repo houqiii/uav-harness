@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>UAV Harness · 飞行控制台</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <script type="module" src="/assets/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="UAV Harness 首页"
+        ><svg viewBox="0 0 28 36" aria-hidden="true">
+          <path d="M14 1 27 18 14 35 1 18Z" fill="#43d6b0" />
+          <path d="m14 7-6 12h8l-2 10 7-13h-8Z" fill="#10282a" /></svg
+        >UAV HARNESS</a
+      >
+      <span class="page-name">飞行控制台</span>
+      <div class="header-actions">
+        <span id="link-state" class="state muted"><i></i>连接中</span
+        ><button id="settings-button" class="button secondary">连接设置</button>
+      </div>
+    </header>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <main class="console-grid">
+      <section class="panel workspace" aria-labelledby="workspace-title">
+        <div class="section-head">
+          <div>
+            <h1 id="workspace-title">指令工作台</h1>
+            <p>用一句话描述任务，交由 Harness 调度执行</p>
+          </div>
+        </div>
+        <form id="intent-form">
+          <label class="sr-only" for="intent">任务意图</label>
+          <textarea
+            id="intent"
+            rows="5"
+            maxlength="10000"
+            placeholder="例如：让模型机的 1 号电机转动 5 秒"
+          ></textarea>
+          <div class="composer-actions">
+            <div class="examples">
+              <span>快捷示例：</span
+              ><button
+                type="button"
+                class="button small secondary"
+                data-example="motor"
+              >
+                单电机测试</button
+              ><button
+                type="button"
+                class="button small secondary"
+                data-example="probe"
+              >
+                起飞探针
+              </button>
+            </div>
+            <button id="compile-button" class="button primary" type="submit">
+              生成调度计划
+            </button>
+          </div>
+          <p id="compiler-note" class="helper">正在检查编译器…</p>
+        </form>
+        <section class="plan-section" aria-labelledby="plan-title">
+          <div class="section-head">
+            <h2 id="plan-title">调度计划</h2>
+            <button
+              id="json-button"
+              class="button small secondary"
+              aria-expanded="false"
+              disabled
+            >
+              JSON
+            </button>
+          </div>
+          <ol class="steps">
+            <li id="step-intent"><span>1</span>理解意图</li>
+            <li id="step-validate"><span>2</span>校验能力</li>
+            <li id="step-dispatch"><span>3</span>派发执行</li>
+          </ol>
+          <div id="plan-content" class="plan-content">
+            <p class="empty-copy">输入任务，生成可执行的调度计划</p>
+          </div>
+          <pre id="plan-json" class="code-box" hidden></pre>
+          <div class="plan-actions">
+            <span id="plan-source" class="helper"></span
+            ><button id="execute-button" class="button primary" disabled>
+              执行计划
+            </button>
+          </div>
+        </section>
+        <section class="records-section" aria-labelledby="records-title">
+          <div class="section-head">
+            <h2 id="records-title">执行记录</h2>
+            <span id="job-count" class="helper"></span>
+          </div>
+          <div id="job-list" class="job-list"></div>
+          <div id="job-empty" class="empty-record">
+            <svg viewBox="0 0 32 36" aria-hidden="true">
+              <rect x="5" y="2" width="22" height="32" rx="3" />
+              <path d="M10 10h12M10 16h12M10 22h8" />
+            </svg>
+            <p>任务执行后，回执和结果将在这里显示</p>
+          </div>
+          <div id="job-detail" hidden>
+            <div class="detail-head">
+              <span id="job-status"></span
+              ><button id="cancel-button" class="button small secondary">
+                取消任务并收尾
+              </button>
+              <button
+                id="reconcile-button"
+                type="button"
+                class="button small secondary"
+                hidden
+              >
+                核实地面状态
+              </button>
+            </div>
+            <div id="job-events" class="event-log" aria-live="polite"></div>
+          </div>
+        </section>
+      </section>
+      <aside class="right-column">
+        <section class="panel telemetry" aria-labelledby="telemetry-title">
+          <div class="section-head">
+            <h2 id="telemetry-title">实时遥测</h2>
+            <div class="telemetry-select">
+              <label class="sr-only" for="vehicle-select">选择飞机</label
+              ><select id="vehicle-select">
+                <option>等待连接</option></select
+              ><span id="vehicle-state" class="state muted"><i></i>等待</span>
+            </div>
+          </div>
+          <div class="flight-state">
+            <div><span>飞行模式</span><strong id="mode">—</strong></div>
+            <div><span>解锁状态</span><strong id="armed">—</strong></div>
+            <div><span>落地状态</span><strong id="landed">—</strong></div>
+          </div>
+          <div class="attitude-area">
+            <div id="horizon" class="horizon" aria-label="姿态仪，等待遥测">
+              <div id="horizon-world" class="horizon-world">
+                <div class="sky"></div>
+                <div class="ground"></div>
+                <div class="horizon-line"></div>
+                <div class="pitch-lines">
+                  <i></i><i></i><i></i><i></i><i></i>
+                </div>
+              </div>
+              <div class="aircraft-reference">
+                <span></span><b></b><span></span>
+              </div>
+              <div class="horizon-tick"></div>
+            </div>
+            <dl class="angles">
+              <div>
+                <dt>Roll</dt>
+                <dd id="roll">—</dd>
+              </div>
+              <div>
+                <dt>Pitch</dt>
+                <dd id="pitch">—</dd>
+              </div>
+              <div>
+                <dt>Yaw</dt>
+                <dd id="yaw">—</dd>
+              </div>
+            </dl>
+          </div>
+          <div class="position-row">
+            <div>
+              <span>电池电压 / 电量</span><strong id="battery">—</strong>
+            </div>
+            <div>
+              <span>当前位置 · NED</span><strong id="position">—</strong>
+            </div>
+          </div>
+          <div class="pwm-head">
+            <span>PWM 输出</span
+            ><span id="telemetry-note" class="helper">等待遥测</span>
+          </div>
+          <div id="pwm-grid" class="pwm-grid"></div>
+        </section>
+        <section class="panel gimbal" aria-labelledby="gimbal-title">
+          <div class="section-head">
+            <h2 id="gimbal-title">云台信息</h2>
+            <div class="gimbal-header">
+              <select id="gimbal-select" aria-label="选择云台" hidden></select
+              ><span id="gimbal-state" class="state muted"><i></i>未接入</span>
+            </div>
+          </div>
+          <div id="media-frame" class="media-frame">
+            <div id="video-surface"></div>
+            <div id="video-empty" class="video-empty">
+              <svg viewBox="0 0 40 34" aria-hidden="true">
+                <path
+                  d="M13 7 16 2h8l3 5h7a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V10a3 3 0 0 1 3-3Z"
+                />
+                <circle cx="20" cy="18" r="7" /></svg
+              ><span id="video-message">等待云台接入</span
+              ><button id="video-settings-button" class="text-button">
+                设置视频地址
+              </button>
+            </div>
+          </div>
+          <div class="gimbal-angles">
+            <div><span>俯仰</span><strong id="gimbal-pitch">—</strong></div>
+            <div><span>横滚</span><strong id="gimbal-roll">—</strong></div>
+            <div><span>航向</span><strong id="gimbal-yaw">—</strong></div>
+          </div>
+          <p id="gimbal-note" class="helper">等待云台姿态消息</p>
+        </section>
+      </aside>
+    </main>
+    <footer>
+      指令与遥测由本地 Harness 提供<span id="control-mode"></span>
+    </footer>
+    <dialog id="settings-dialog">
+      <form id="settings-form">
+        <div class="section-head">
+          <h2>连接设置</h2>
+          <button
+            type="button"
+            id="close-settings"
+            class="button small secondary"
+          >
+            关闭
+          </button>
+        </div>
+        <p class="helper">网页连接当前本地服务。串口及机型在启动时选择。</p>
+        <label for="api-token">API 访问令牌（服务启用鉴权时填写）</label
+        ><input
+          id="api-token"
+          type="password"
+          autocomplete="off"
+          placeholder="Bearer token"
+        /><label for="video-url">当前飞机的视频地址</label
+        ><input
+          id="video-url"
+          type="url"
+          placeholder="http://192.168.1.2:8080/stream"
+        />
+        <p id="video-discovered" class="helper"></p>
+        <label for="video-kind">视频格式</label
+        ><select id="video-kind">
+          <option value="mjpeg">MJPEG 图像流</option>
+          <option value="video">浏览器原生视频（MP4 / Safari HLS）</option>
+        </select>
+        <p class="helper">
+          RTSP 需先转为浏览器可播放的 HTTP
+          视频流。视频地址仅保存在本浏览器，姿态由 MAVLink 独立接收。
+        </p>
+        <div id="settings-error" class="error-copy" role="alert"></div>
+        <button type="submit" class="button primary">保存设置</button>
+      </form>
+    </dialog>
+  </body>
+</html>

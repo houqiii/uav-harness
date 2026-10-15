@@ -6,6 +6,7 @@ import math
 import time
 from .errors import HarnessError, Uncertain
 from .transport import json_safe, mav
+from .payload import PayloadTelemetry
 
 
 FLIGHT_ACTIONS = {"vehicle.arm", "vehicle.disarm", "flight.takeoff",
@@ -26,6 +27,8 @@ class VehicleSession:
         self.stream_task = None
         self.stream_fault = None
         self.allowed_modes = None
+        self.payload = PayloadTelemetry(config.system_id, settings)
+        transport.payload_listeners.append(self.payload.receive)
         transport.listeners.append(self.receive)
 
     @property
@@ -233,5 +236,7 @@ class VehicleSession:
                 "landed": fields("EXTENDED_SYS_STATE"), "local_position_ned": fields("LOCAL_POSITION_NED"),
                 "attitude": fields("ATTITUDE"), "home": fields("HOME_POSITION", False),
                 "sys_status": fields("SYS_STATUS"),
+                "servo_output": fields("SERVO_OUTPUT_RAW"),
+                **self.payload.snapshot(),
                 "firmware": fields("AUTOPILOT_VERSION", False),
                 "completion_policy": "bench evidence only" if self.config.profile == "model_bench" else "observed flight telemetry"}

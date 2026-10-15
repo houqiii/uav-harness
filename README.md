@@ -6,6 +6,15 @@
 
 ## 快速运行
 
+网页控制台：左侧一句话翻译、计划预览和调度记录，右上实时遥测，右下云台视频与姿态。
+
+```bash
+bash scripts/mac-dashboard.sh
+# 打开 http://127.0.0.1:8080；无硬件试运行加 --mock
+```
+
+自然语言复用后端 DeepSeek 配置；未配置时可使用明确标注的固定测试计划。视频在“连接设置”填写 HTTP 视频地址，未接入的云台显示实际缺失状态。无需 Node/npm，HTML/JS/CSS 随 Python 包提供。详见 [网页控制台](docs/web-console.md)。
+
 另一台 Mac 插上已调通的模型机后，可直接运行交互终端：
 
 ```bash
@@ -37,6 +46,8 @@ CLI 可直接执行异构示例并输出逐动作结果与 MAVLink 回执：
 
 | API | 用途 |
 |---|---|
+| `GET /v1/dashboard` | 网页状态、近期任务及编译器配置状态 |
+| `POST /v1/plans/validate` | 校验计划能力与参数，不执行 |
 | `GET /v1/vehicles` | 飞机身份、状态、后端及可用动作 |
 | `POST /v1/actions` | 调度一个原子动作 |
 | `POST /v1/plans` | 提交含依赖的多机动作计划 |

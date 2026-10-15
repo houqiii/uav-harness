@@ -37,6 +37,22 @@
         }
       }
     },
+    "/v1/dashboard": {
+      "get": {
+        "summary": "Dashboard",
+        "operationId": "dashboard_v1_dashboard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/actions": {
       "post": {
         "summary": "Action",
@@ -154,6 +170,42 @@
         },
         "responses": {
           "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/plans/validate": {
+      "post": {
+        "summary": "Validate Plan",
+        "operationId": "validate_plan_v1_plans_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Plan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {

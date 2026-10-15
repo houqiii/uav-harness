@@ -35,6 +35,7 @@ class MAVLinkTransport:
         self.peer = (config.peer_host, config.peer_port) if config.peer_port else None
         self.tasks = []
         self.listeners = []
+        self.payload_listeners = []
         self.pending = {}
         self.poisoned = set()
         self.locks = {}
@@ -103,6 +104,11 @@ class MAVLinkTransport:
                     for destination in self.config.observers:
                         host, port = destination.rsplit(":", 1)
                         self.mirror.sendto(raw, (host, int(port)))
+                    # Payloads can have their own component ID. They never enter the
+                    # directed flight-controller ACK/session matching below.
+                    if source[0] in {identity[0] for identity in self.targets}:
+                        for callback in self.payload_listeners:
+                            callback(msg, stamp)
                     if source not in self.targets:
                         continue
                     if msg.get_type() == "COMMAND_ACK":
