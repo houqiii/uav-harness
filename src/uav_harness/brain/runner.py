@@ -4,7 +4,7 @@ import asyncio
 import math
 import time
 import uuid
-from .geometry import ground_target, approach_offset
+from .geometry import ground_target, approach_offset, candidate_ray
 from .provider import RetryablePlannerError
 from ..errors import HarnessError, Uncertain
 
@@ -117,30 +117,39 @@ class Mission:
             if self.target:
                 self.target["visible"] = False
             return
+        previous = self.target
+        # Reprocessing a frame cannot provide another independent confirmation.
+        if previous and previous.get("observation_id") == obs.observation_id:
+            return
         grounded = None
+        grounding_error = None
         try:
             grounded = ground_target(obs, decision.target)
-        except HarnessError:
-            pass
-        previous = self.target
+        except HarnessError as exc:
+            grounding_error = str(exc)
+        ray = candidate_ray(obs, decision.target)
+        origin = obs.camera.position_ned or obs.telemetry.position_ned
         same = False
-        if previous and grounded and previous.get("geometry"):
+        eligible = (
+            previous
+            and previous.get("visible")
+            and previous["label"] == decision.target.label
+            and 0
+            < obs.captured_at - previous["last_seen_at"]
+            <= self.policy.max_observation_age_s
+        )
+        if eligible and grounded and previous.get("geometry"):
             old = previous["geometry"]
-            same = previous["label"] == decision.target.label and math.dist(
+            same = math.dist(
                 old["position_ned"][:2], grounded["position_ned"][:2]
             ) <= max(5, old["uncertainty_m"] + grounded["uncertainty_m"])
-        elif previous and previous.get("observation_id") != obs.observation_id:
-            box = previous["bbox"]
-            new = decision.target.bbox
+        elif eligible and previous.get("bearing_ray_ned"):
+            # Compare calibrated world bearings, not pixel boxes or exact float yaw.
+            # Without range, translation makes angular association ambiguous.
+            dot = sum(a * b for a, b in zip(previous["bearing_ray_ned"], ray))
             same = (
-                previous["label"] == decision.target.label
-                and max(abs(a - b) for a, b in zip(box, new)) < 40
-                and previous.get("camera_yaw_deg") == obs.camera.yaw_deg
-                and math.dist(
-                    previous.get("capture_position_ned", obs.telemetry.position_ned),
-                    obs.telemetry.position_ned,
-                )
-                < 0.2
+                math.degrees(math.acos(max(-1, min(1, dot)))) < 1.5
+                and math.dist(previous["capture_position_ned"], origin) < 0.5
             )
         self.target = {
             "label": decision.target.label,
@@ -148,7 +157,10 @@ class Mission:
             "visible": True,
             "observation_id": obs.observation_id,
             "camera_yaw_deg": obs.camera.yaw_deg,
-            "capture_position_ned": list(obs.telemetry.position_ned),
+            "capture_position_ned": list(origin),
+            "bearing_ray_ned": ray,
+            "grounding_error": grounding_error,
+            "ground_contact_visible": decision.target.ground_contact_visible,
             "confirmed_observations": previous["confirmed_observations"] + 1
             if same
             else 1,

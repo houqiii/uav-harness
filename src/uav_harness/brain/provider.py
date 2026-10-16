@@ -77,6 +77,14 @@ More-negative camera pitch looks closer to the ground under the aircraft; moving
 If a target moves toward the bottom edge during approach, tilt further downward and reobserve before another translation.
 If a candidate is too small to identify or see its feet, centre it with yaw/gimbal, then use optical zoom when available;
 reduce zoom when a target is clipped. An uncertain patch is a candidate, not a confirmed person.
+Camera pitch changes aim, NOT magnification. If a candidate is above centre, make pitch less negative;
+if below centre, make it more negative. Use small corrections accounting for the current zoom/FOV.
+Once centred but too small, choose zoom as the actual next_action, not another downward tilt.
+Writing zoom in plan does not execute zoom: only next_action executes. Repeated unchanged observations do not add detail.
+Read target_memory.previous_observation_blockers: association count alone does not prove identity or visible feet.
+If association is sufficient but ground contact is missing, obtain a clearer grounded view rather than repeating confirmation.
+If a camera adjustment loses a candidate, first reacquire its last bearing; do not immediately abandon it for another scan sector.
+Directional-only hints contain no range and must not be used to invent a target position or approach command.
 When a target is seen once, observe again or adjust gimbal to confirm; approach requires two consistent fresh observations.
 As soon as it is confirmed and geometry is available, plan the next approach/altitude/gimbal action toward the task goal.
 Do not finish a 360-degree sweep before inspecting, confirming or approaching a visible target. Scan coverage is never an approach prerequisite.
@@ -133,6 +141,34 @@ def planning_memory(obs, history, target):
             )
             if k in target
         }
+        blockers = []
+        if not target.get("visible"):
+            blockers.append("target_not_visible_in_previous_observation")
+        if target.get("confirmed_observations", 0) < 2:
+            blockers.append("needs_second_consistent_fresh_observation")
+        if not target.get("geometry"):
+            blockers.append(
+                target.get("grounding_error") or "ground_geometry_unavailable"
+            )
+        memory["previous_observation_blockers"] = blockers
+        memory["confirmation_meaning"] = (
+            "spatial association only; verify identity and ground contact in current image"
+        )
+        ray = target.get("bearing_ray_ned")
+        if ray:
+            origin = obs.camera.position_ned or obs.telemetry.position_ned
+            moved = math.dist(origin, target["capture_position_ned"])
+            memory["last_sighting_direction"] = {
+                "heading_deg": math.degrees(math.atan2(ray[1], ray[0])) % 360,
+                "pitch_deg": -math.degrees(
+                    math.atan2(ray[2], math.hypot(ray[0], ray[1]))
+                ),
+                "directional_only": True,
+                "translation_since_sighting_m": moved,
+                "valid_as_current_aim": moved < 0.5,
+                "age_s": max(0, obs.captured_at - target["last_seen_at"]),
+                "requires_current_image_confirmation": True,
+            }
         geometry = target.get("geometry")
         if geometry:
             memory["historical_geometry"] = geometry

@@ -126,7 +126,9 @@ def test_seed_changes_scene_but_never_inserts_a_preplanned_route(tmp_path):
 
 
 @pytest.mark.parametrize("failure", [InvalidDecision, RetryablePlannerError])
-async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch(failure):
+async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch(
+    failure,
+):
     port = SimulatedPort("v", seed=1)
     seen = []
 
@@ -147,13 +149,94 @@ async def test_confirmed_target_can_be_approached_before_any_scan_coverage():
     port = SimulatedPort("v", seed=1)
     port.position = [0, 0, -50]
     obs = await port.observe()
-    m = Mission(MissionRequest(query="找到后接近", vehicle_id="v"), port, None, Policy())
+    m = Mission(
+        MissionRequest(query="找到后接近", vehicle_id="v"), port, None, Policy()
+    )
     m.resolved_objective = "approach"
     m.target = {
-        "visible": True, "confirmed_observations": 2,
-        "geometry": {"position_ned": [100, 0, 0], "horizontal_distance_m": 100, "uncertainty_m": 2},
+        "visible": True,
+        "confirmed_observations": 2,
+        "geometry": {
+            "position_ned": [100, 0, 0],
+            "horizontal_distance_m": 100,
+            "uncertainty_m": 2,
+        },
     }
     assert not m.scanned
     command = m.ground_command(obs, proposal(obs, {"action": "approach", "step_m": 10}))
     assert command["action"] == "move"
     assert command["offset_ned"] == pytest.approx((10, 0, 0))
+
+
+async def test_candidate_association_survives_pose_jitter_but_requires_grounding():
+    from uav_harness.brain.contracts import Detection
+    from uav_harness.brain.provider import planning_memory
+
+    port = SimulatedPort("v", seed=1)
+    port.position = [0, 0, -50]
+    obs = await port.observe()
+    m = Mission(MissionRequest(query="接近目标", vehicle_id="v"), port, None, Policy())
+    m.resolved_objective = "approach"
+
+    def frame(index, yaw, pitch, bbox):
+        current = obs.model_copy(deep=True)
+        current.observation_id = f"candidate-{index}"
+        current.captured_at = obs.captured_at + index
+        current.camera = current.camera.model_copy(
+            update={
+                "width": 1280,
+                "height": 720,
+                "cx": 640,
+                "cy": 360,
+                "fx": 2207,
+                "fy": 2207,
+                "yaw_deg": yaw,
+                "pitch_deg": pitch,
+                "roll_deg": 0,
+            }
+        )
+        decision = proposal(current, {"action": "observe"})
+        decision.target = Detection(
+            label="疑似戴红帽人员", bbox=bbox, ground_contact_visible=False
+        )
+        return current, decision
+
+    # Actual rounds 4–7: yaw/pitch change while the image candidate stays on
+    # approximately the same world bearing. No target ground truth is used.
+    samples = [
+        (75.29, -16.16, [512, 578, 522, 602]),
+        (75.10, -16.48, [518, 558, 528, 578]),
+        (75.20, -16.03, [512, 580, 522, 605]),
+        (75.52, -21.75, [508, 275, 516, 300]),
+    ]
+    for index, values in enumerate(samples, 1):
+        current, decision = frame(index, *values)
+        m.remember_target(current, decision)
+        assert m.target["confirmed_observations"] == index
+        m.remember_target(current, decision)
+        assert m.target["confirmed_observations"] == index
+    assert m.target["geometry"] is None
+    with pytest.raises(HarnessError, match="ground geometry unavailable"):
+        m.ground_command(
+            current, proposal(current, {"action": "approach", "step_m": 10})
+        )
+    _, memory = planning_memory(current, [], m.target)
+    assert memory["previous_observation_blockers"]
+    assert memory["last_sighting_direction"]["directional_only"]
+    assert "bbox" not in memory
+    assert "historical_geometry" not in memory
+
+    # Losing the target retains a reacquisition bearing, but breaks the streak.
+    lost = current.model_copy(update={"observation_id": "lost"})
+    m.remember_target(lost, proposal(lost, {"action": "observe"}))
+    _, memory = planning_memory(lost, [], m.target)
+    assert (
+        "target_not_visible_in_previous_observation"
+        in memory["previous_observation_blockers"]
+    )
+    current, decision = frame(5, *samples[-1])
+    m.remember_target(current, decision)
+    assert m.target["confirmed_observations"] == 1
+    current, decision = frame(6, 95, -21.75, samples[-1][2])
+    m.remember_target(current, decision)
+    assert m.target["confirmed_observations"] == 1

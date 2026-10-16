@@ -25,6 +25,21 @@ def basis(camera):
     return forward, right, down
 
 
+def candidate_ray(obs, detection):
+    """World-space bearing only; a candidate pixel cannot establish range."""
+    c = obs.camera
+    left, top, right, bottom = detection.bbox
+    u = (left + right) / 2000 * c.width
+    v = (top + bottom) / 2000 * c.height
+    forward, horizontal, down = basis(c)
+    ray = [
+        forward[i] + (u - c.cx) / c.fx * horizontal[i] + (v - c.cy) / c.fy * down[i]
+        for i in range(3)
+    ]
+    norm = math.sqrt(sum(x * x for x in ray))
+    return [x / norm for x in ray]
+
+
 def project(camera, position, point):
     forward, right, down = basis(camera)
     delta = [a - b for a, b in zip(point, position)]
