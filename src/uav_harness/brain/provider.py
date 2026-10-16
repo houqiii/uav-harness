@@ -8,6 +8,7 @@ import os
 import time
 from urllib.parse import urlsplit
 import httpx
+from pydantic import ValidationError
 from .contracts import Decision
 from ..model_stream import read_content
 from ..errors import HarnessError
@@ -54,6 +55,10 @@ When observation.accepted_task_goal is non-null, copy that exact value into task
 Keep task_goal consistent with the initial accepted goal in history; do not silently broaden a find-only request.
 Return ONE JSON object matching the Decision schema. Output concise observable evidence and a short updated task plan,
 not private chain-of-thought. Choose exactly ONE next_action; never invent successful actions, target coordinates or distances.
+If recent_actions_and_actual_results contains a rejected format validation, correct the named fields against the schema.
+Return a JSON object, no Markdown fences. Use exactly one next_action object with action-specific fields:
+zoom uses zoom_x (1..5), approach uses step_m (0..30], yaw uses heading_deg [0..360),
+gimbal uses pitch_deg [-85..-5] and optional yaw_deg [0..360). Do not combine multiple actions in one object.
 All bbox coordinates use [left,top,right,bottom] scaled 0..1000 on THIS image. Ground contact must actually be visible.
 Re-measure the bbox in the CURRENT image every round. Never copy a box from target memory, history or a previous scene description.
 Historical target geometry and camera_aim_hint are only reacquisition hints, not evidence that the target is currently visible.
@@ -300,6 +305,17 @@ class QwenPlanner:
         except httpx.HTTPError as exc:
             raise RetryablePlannerError(
                 f"Qwen VLM network error: {type(exc).__name__}; no action dispatched"
+            ) from None
+        except ValidationError as exc:
+            # Preserve field diagnostics for both the operator and the next model
+            # request, without logging the raw response, image, or credentials.
+            details = "; ".join(
+                f"{'.'.join(str(part) for part in error['loc']) or 'response'}: "
+                f"{error['type']} ({error['msg'][:180]})"
+                for error in exc.errors(include_input=False, include_url=False)[:6]
+            )
+            raise InvalidDecision(
+                f"Qwen VLM 指令格式校验失败（非欠费）：{details}；未下发动作。请按 schema 修正字段"
             ) from None
         except (ValueError, KeyError, TypeError, IndexError) as exc:
             raise InvalidDecision(

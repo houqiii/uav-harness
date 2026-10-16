@@ -484,3 +484,30 @@ async def test_confirmed_target_closes_loop_with_geometric_steps_and_observation
     assert p.position[2] == -50
     assert m.target["confirmed_observations"] >= 2
     assert m.round > len(moves)
+
+
+async def test_invalid_model_action_reports_fields_without_raw_response(monkeypatch):
+    from uav_harness.brain.provider import InvalidDecision, planning_memory
+
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
+    obs = await SimulatedPort("v", seed=1).observe()
+
+    def reply(req):
+        data = decision(obs).model_dump()
+        data["next_action"] = {"action": "zoom", "zoom_x": 9}
+        data["scene_summary"] = "private-response-marker"
+        return httpx.Response(200, json={"choices": [{
+            "finish_reason": "stop", "message": {"content": json.dumps(data)}
+        }]})
+
+    with pytest.raises(InvalidDecision) as caught:
+        await QwenPlanner(httpx.MockTransport(reply)).decide(
+            "找人", obs, Policy(), [], None, lambda e: None
+        )
+    message = str(caught.value)
+    assert "next_action.zoom.zoom_x" in message
+    assert "less_than_equal" in message
+    assert "private-response-marker" not in message
+    assert "test-key" not in message
+    actions, _ = planning_memory(obs, [{"result": {"status": "rejected", "error": message}}], None)
+    assert actions[0]["result"]["error"] == message
