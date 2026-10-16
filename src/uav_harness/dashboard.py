@@ -34,8 +34,9 @@ def main():
     parser.add_argument('--board-id', type=int, default=1010)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--mock', action='store_true', help='启动协议模拟对端，无实机连接')
-    mode.add_argument('--offline', action='store_true', help='VLM 在线规划与几何仿真，不打开任何飞控链路')
-    parser.add_argument('--sandbox', action='store_true', help='接入 Drone4D 独立沙盒，同时保留实机控制页面')
+    mode.add_argument('--offline', action='store_true', help='不打开实机链路；与 --no-sandbox 合用时使用几何测试环境')
+    parser.add_argument('--sandbox', action=argparse.BooleanOptionalAction, default=True,
+                        help='默认启用 Drone4D 沙盒与实机双页面；--no-sandbox 关闭在线沙盒')
     parser.add_argument('--observe', action='store_true', help='只读观察，禁止控制')
     parser.add_argument('--http-port', type=int, default=None)
     parser.add_argument('--state-dir', type=Path, default=Path('state/bench-console'))
@@ -59,7 +60,7 @@ def main():
             except NoSerialPort:
                 print('未检测到 USB 串口，自动进入离线推演。', flush=True)
                 settings, offline = offline_settings(state_dir), True
-        if args.sandbox: settings.drone4d.enabled=True
+        settings.drone4d.enabled = args.sandbox
         if args.observe or offline:
             settings.allow_control = False
         if args.http_port is not None:
@@ -68,7 +69,7 @@ def main():
         print('Drone4D 在线沙盒；实机控制接口待连接。' if args.sandbox and offline else '无硬件模式：Qwen VLM 在线规划＋几何相机／运动学仿真；不打开飞控链路，不发送 MAVLink 指令。' if offline else
               '协议模拟：所有响应均不代表实机效果。' if kinds == {'simulator'} else
               '实机链路：网页点击执行后才派发控制动作。', flush=True)
-        print(f'网页控制台：http://{settings.api_host}:{settings.api_port}', flush=True)
+        print(f'网页控制台：http://{settings.api_host}:{settings.api_port}' + ('/#sandbox' if args.sandbox else '/#hardware'), flush=True)
         print('关闭服务请按 Ctrl+C；等待已有任务收尾。', flush=True)
         uvicorn.run(create_app(settings, offline=offline), host=settings.api_host, port=settings.api_port, workers=1)
 

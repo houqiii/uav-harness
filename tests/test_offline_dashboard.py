@@ -86,13 +86,13 @@ def test_offline_does_not_touch_real_job_journal(tmp_path, monkeypatch):
         assert db.execute('SELECT status FROM jobs WHERE id=?', (job_id,)).fetchone()[0] == 'queued'
 
 
-@pytest.mark.parametrize('explicit', [False, True])
-def test_launcher_opens_preview_without_usb(tmp_path, monkeypatch, explicit):
+@pytest.mark.parametrize('extra_args', [[], ['--offline'], ['--no-sandbox', '--offline']])
+def test_launcher_opens_preview_without_usb(tmp_path, monkeypatch, extra_args):
     from uav_harness import dashboard
     no_links(monkeypatch)
     from serial.tools import list_ports
     monkeypatch.setattr(list_ports, 'comports', lambda: [])
-    monkeypatch.setattr(sys, 'argv', ['dashboard', *(['--offline'] if explicit else []), '--state-dir', str(tmp_path)])
+    monkeypatch.setattr(sys, 'argv', ['dashboard', *extra_args, '--state-dir', str(tmp_path)])
     served = []
     def serve(app, **kwargs):
         with TestClient(app) as client:
@@ -100,6 +100,11 @@ def test_launcher_opens_preview_without_usb(tmp_path, monkeypatch, explicit):
             assert state['mode'] == 'offline'
             assert {'ardupilot', 'px4'} <= {v['backend'] for v in state['vehicles']}
             assert any('flight.move_relative' in v['actions'] for v in state['vehicles'])
+            enabled = '--no-sandbox' not in extra_args
+            assert client.get('/v1/sandbox').json()['enabled'] is enabled
+            brain = client.get('/v1/brain').json()
+            assert brain['mode'] == ('hardware_disconnected' if enabled else 'geometric_simulation')
+            assert all(v['execution_enabled'] is not enabled for v in brain['vehicles'])
             served.append(state)
     monkeypatch.setattr(dashboard.uvicorn, 'run', serve)
     dashboard.main()

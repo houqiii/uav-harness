@@ -12,6 +12,8 @@ export DASHSCOPE_API_KEY='你的百炼 API key'
 bash scripts/mac-sandbox.sh --http-port 8768
 ```
 
+普通入口 `bash scripts/mac-dashboard.sh` 也默认准备并启用沙盒，使用 `http://127.0.0.1:8080/#sandbox`。启动后点击“创建独立沙盒”，等待原生渲染器在线，再输入任务并点击“启动闭环”。`--no-sandbox` 才会关闭在线沙盒；不需要串口。
+
 脚本会准备 Python 依赖、缺失时拉取已验收的 Drone4D 0.2.0 源码 revision `b4d83e3`，安装并构建带 Harness 图像桥的原生前端。后续启动会复用匹配的构建。VLM 观测视图固定以 1280×720 渲染，页面只缩放显示，避免窗口尺寸影响小目标像素数量。打开 `http://127.0.0.1:8768/#sandbox`，点击“创建独立沙盒”，等待原生世界与云台在线，输入任务并启动闭环。保持页面打开，当前版本的 RGB 从浏览器的原生 FPV 帧缓冲读取。
 
 已有源码：`export DRONE4D_SOURCE=/你的路径/ANet-Drone4D`。仅重建视图：`.venv/bin/python scripts/prepare-drone4d.py`。配置项在 `drone4d`，含服务地址、源码/构建目录、速度、采集/动作时限、初始云台俯角和光学倍率。沙盒准入按远端 Retry-After 等待，可点击“结束沙盒”取消等待；初始化失败后重试会保留已创建的会话，不重复消耗创建额度。SDK、REST 与 WS 均直接访问所配服务，不继承环境代理；这保证公开接入的 PoW 挑战和应答使用同一出口地址。

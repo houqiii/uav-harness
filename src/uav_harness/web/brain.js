@@ -150,7 +150,8 @@ function buttons() {
     !v?.camera_configured ||
     (backend === "sandbox" && !metadata?.sandbox?.renderer_ready) ||
     !$("demo-intent").value.trim();
-  $("demo-start").textContent = v?.execution_enabled ? "启动闭环" : "单轮规划";
+  $("demo-start").textContent =
+    backend === "sandbox" || v?.execution_enabled ? "启动闭环" : "单轮规划";
   $("brain-preview").disabled =
     busy || !online || Boolean(live) || !v?.camera_configured;
   $("demo-intent").disabled = Boolean(live || uncertain);
@@ -263,6 +264,24 @@ function renderCamera() {
     : obs;
   if (!f) {
     selectedFrame = null;
+    viewVersion++;
+    $("demo-camera-image").hidden = true;
+    $("demo-box").hidden = true;
+    $("brain-camera-empty").hidden = false;
+    $("brain-camera-empty").textContent =
+      backend === "sandbox" ? "连接沙盒后采集原生云台画面" : "等待相机观测";
+    $("brain-camera-source").textContent = "等待相机观测";
+    for (const id of [
+      "brain-pitch",
+      "demo-gimbal-heading",
+      "brain-frame-id",
+      "brain-image-age",
+      "demo-frame-label",
+      "demo-camera-caption",
+      "demo-camera-source",
+    ])
+      $(id).textContent = "—";
+    $("brain-camera-note").textContent = "图像与拍摄时遥测绑定。";
     return;
   }
   const historical = Boolean(selectedFrame),
@@ -404,6 +423,17 @@ function render() {
             : "MAVLink 遥测",
       ),
     );
+  } else {
+    for (const [id, unit] of [
+      ["demo-altitude", " m"],
+      ["demo-speed", " m/s"],
+      ["demo-heading", "°"],
+      ["demo-battery", "%"],
+    ])
+      metric(id, "—", unit);
+    $("demo-flight-mode").textContent = "等待飞行状态";
+    $("demo-ned").textContent = "N — · E — · D — m";
+    $("brain-telemetry-source").textContent = "等待观测";
   }
   const stages = [
     "采集观测",

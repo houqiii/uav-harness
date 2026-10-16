@@ -10,11 +10,11 @@
 
 ```bash
 export DASHSCOPE_API_KEY='自己的百炼官方密钥'
-bash scripts/mac-dashboard.sh --offline
-# 打开 http://127.0.0.1:8080；无需串口，真实请求 Qwen VLM
+bash scripts/mac-dashboard.sh
+# 打开 http://127.0.0.1:8080/#sandbox；连接沙盒后输入任务并启动闭环
 ```
 
-没有密钥仍能打开页面和采集观测；模型失败明确报错。本次账户请求返回 `Arrearage`，尚未验证真实多轮视觉决策。实机接入和闭环边界见 [VLM 在线闭环](docs/vlm-brain.md)，旧 DeepSeek/模型机操作见 [网页控制台](docs/web-console.md)。无需 Node/npm。
+默认启用 Drone4D 在线沙盒，首次准备原生视图需要 Node 22.12+（22 系列）；无需串口。没有密钥仍能打开页面，模型失败明确报错。已有真实 Qwen 多轮调用，完整任务验证范围见 [沙盒验证记录](docs/DRONE4D-VALIDATION.md)。实机接入和闭环边界见 [VLM 在线闭环](docs/vlm-brain.md)，旧 DeepSeek/模型机操作见 [网页控制台](docs/web-console.md)。旧几何环境调试可用 `bash scripts/mac-dashboard.sh --no-sandbox --offline`。
 
 另一台 Mac 插上已调通的模型机后，可直接运行交互终端：
 

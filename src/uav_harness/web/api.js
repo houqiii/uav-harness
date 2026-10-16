@@ -60,11 +60,15 @@ export async function request(
     const text =
       response.status === 401
         ? "需要访问令牌，请打开“连接设置”"
-        : data.error ||
-          (Array.isArray(data.detail)
-            ? data.detail.map((e) => e.msg).join("；")
-            : data.detail) ||
-          `HTTP ${response.status}`;
+        : response.status === 404 &&
+            path.startsWith("/v1/sandbox") &&
+            data.detail === "Not Found"
+          ? "当前服务没有沙盒接口；请用 bash scripts/mac-dashboard.sh 重启服务后刷新页面"
+          : data.error ||
+            (Array.isArray(data.detail)
+              ? data.detail.map((e) => e.msg).join("；")
+              : data.detail) ||
+            `HTTP ${response.status}`;
     const error = new Error(text);
     error.status = response.status;
     throw error;
