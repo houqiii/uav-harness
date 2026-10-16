@@ -32,7 +32,12 @@ async def test_vlm_can_explore_before_detection_but_cannot_escape_fence_or_cross
         MissionRequest(query="自主搜索", vehicle_id="v"),
         port,
         None,
-        Policy(max_step_m=30, max_radius_m=100, stand_off_m=30),
+        Policy(
+            allow_search_reposition=True,
+            max_step_m=30,
+            max_radius_m=100,
+            stand_off_m=30,
+        ),
     )
     m.resolved_objective = "approach"
     cmd = m.ground_command(
@@ -388,3 +393,42 @@ async def test_inspection_standoff_horizon_and_fence_bounds():
     m.resolved_objective = "find"
     with pytest.raises(HarnessError, match="approach mission"):
         m.ground_command(obs, d)
+
+
+async def test_default_search_cannot_translate_even_if_model_requests_exploration():
+    from uav_harness.brain.provider import active_perception_feedback
+    from uav_harness.drone4d.settings import Drone4DConfig
+
+    port = SimulatedPort("v", seed=1)
+    port.position = [0, 0, -50]
+    obs = await port.observe()
+    m = Mission(
+        MissionRequest(query="找人后接近", vehicle_id="v"),
+        port,
+        None,
+        Drone4DConfig().mission_policy,
+    )
+    m.resolved_objective = "approach"
+    assert not m.policy.allow_search_reposition
+    # Keep a deliberately stale advertised capability to test server enforcement,
+    # independent of the new native capability filtering and prompt compliance.
+    assert "search_move" in obs.capabilities
+    with pytest.raises(HarnessError, match="search reposition disabled"):
+        m.ground_command(
+            obs,
+            proposal(
+                obs, {"action": "search_move", "heading_deg": 120, "distance_m": 30}
+            ),
+        )
+    command = m.ground_command(
+        obs, proposal(obs, {"action": "yaw", "heading_deg": 120})
+    )
+    await port.execute(command)
+    assert port.position == [0, 0, -50]
+    assert port.heading == 120
+    obs.capabilities.append("inspect_target")
+    with pytest.raises(HarnessError, match="current-image"):
+        m.ground_command(
+            obs, proposal(obs, {"action": "inspect_target", "distance_m": 15})
+        )
+    assert active_perception_feedback(obs, m.policy, [])["search_position_locked"]

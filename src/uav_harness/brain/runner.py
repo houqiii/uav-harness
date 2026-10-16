@@ -223,6 +223,10 @@ class Mission:
         if a.action in ("yaw", "gimbal", "approach") and not t.airborne:
             raise HarnessError("take off before airborne search tools")
         if a.action == "search_move":
+            if not p.allow_search_reposition:
+                raise HarnessError(
+                    "search reposition disabled: stay in place and use yaw/gimbal to search; movement toward a candidate requires a current detection via inspect_target/approach"
+                )
             if not t.airborne:
                 raise HarnessError("take off before exploratory translation")
             if (

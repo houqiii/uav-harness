@@ -76,7 +76,10 @@ Action priorities (resolve these before writing any scan checklist):
    Choose zoom from observed size/current camera.zoom_x, not a mandatory 2x->3x sequence. Preserve the box in frame.
 5. Candidate lost => aim_target to last bearing, or reduce zoom to regain it. If the same action failed to recover it,
    change the view/zoom rather than repeat identical commands. Do not immediately abandon it for a scan sector.
-6. Only when there is no candidate to inspect/follow, select a new search view or bounded search_move.
+6. No current candidate => STAY AT THE CURRENT POSITION and change the observation direction with yaw/gimbal.
+   A new scan heading means yaw, NOT translation. Do not invent candidate-directed motion without a current detection.
+   Only if policy.allow_search_reposition=true AND search_move is advertised may area exploration include a translation.
+   With the default false policy, search_move is forbidden even if an older context contains earlier search_move actions.
    scan_step_deg is optional search spacing, not a required full circle before investigating or approaching.
 
 Tool meanings:
@@ -193,6 +196,7 @@ def active_perception_feedback(obs, policy, history):
     enabled = policy.allow_candidate_inspection and "inspect_target" in obs.capabilities
     return {
         "inspection_enabled": enabled,
+        "search_position_locked": not policy.allow_search_reposition,
         "magnified_view_available": bool(
             obs.camera.zoom_x and obs.camera.zoom_x >= 1.5
         ),

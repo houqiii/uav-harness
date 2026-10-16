@@ -199,11 +199,15 @@ class Drone4DPort:
                 "aim_target",
                 "altitude",
                 "approach",
-                "search_move",
                 "observe",
                 "hold",
                 "finish",
             ]
+            + (
+                ["search_move"]
+                if self.service.config.mission_policy.allow_search_reposition
+                else []
+            )
             + (["zoom"] if self.zoom_available() else [])
             + (
                 ["inspect_target"]

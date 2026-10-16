@@ -175,3 +175,26 @@ inspect_target(15). Grounding yielded a horizontal NED offset approximately
 Regression tests exercise simulated movement, missing-feet acceptance,
 disabled policy, find-only goals, unzoomed/lost detections, horizon, near-target
 and geofence rejection. This is not an end-to-end native mission success.
+
+### 2026-10-16: search rotation must not become exploration translation
+
+The latest cancelled run selected search_move(120deg,30m) and then
+search_move(150deg,30m) in rounds 2 and 3 while reporting target=null.
+This was the separately advertised free exploration capability, not
+inspect_target bypassing its detection requirement.
+
+Added allow_search_reposition=false as the default policy. The native adapter
+omits search_move unless explicitly enabled, and the runner independently
+rejects it under the default policy even if a stale/misbehaving planner asks
+for it. No-current-candidate search changes the viewing direction in place;
+inspect_target still requires a current magnified candidate and approach
+retains its grounded detection requirements. Optional research exploration
+remains available only with explicit policy opt-in.
+
+One isolated live replay of the saved round-2 image and preceding result
+selected a gimbal adjustment with target=null; the resulting command has no
+translation. Regression tests verify server-side rejection with a stale
+search_move capability, yaw execution preserving position, rejection of
+candidate inspection without a detection, and continued positive coverage
+of magnified-candidate inspection. 53 related tests passed. No native flight
+command was sent by the replay.

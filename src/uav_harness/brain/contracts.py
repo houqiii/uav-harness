@@ -6,6 +6,7 @@ from ..contracts import Contract, Id
 
 
 class Policy(Contract):
+    allow_search_reposition: bool = False
     allow_candidate_inspection: bool = False
     inspection_step_m: float = Field(default=15, gt=0, le=15)
     search_altitude_m: float = Field(default=50, gt=0, le=100)
