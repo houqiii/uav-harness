@@ -244,12 +244,16 @@ async def test_search_coverage_requires_a_ground_view_wide_enough_for_scan_step(
     assert bool(mission.scanned) is covered
 
 
-async def test_runner_rejects_unconfirmed_target_and_reports_feedback_in_next_round():
+async def test_runner_rejects_ungrounded_metric_approach_and_reports_feedback():
     p = SimulatedPort("v", seed=3)
     p.position = [0, 0, -50]
     planner = ScriptedPlanner(
         [
-            lambda o: decision(o, {"action": "approach", "step_m": 5}, detection()),
+            lambda o: decision(
+                o,
+                {"action": "approach", "step_m": 5},
+                {**detection(), "ground_contact_visible": False},
+            ),
             lambda o: decision(o, {"action": "finish", "outcome": "needs_operator"}),
         ]
     )
@@ -496,9 +500,14 @@ async def test_invalid_model_action_reports_fields_without_raw_response(monkeypa
         data = decision(obs).model_dump()
         data["next_action"] = {"action": "zoom", "zoom_x": 9}
         data["scene_summary"] = "private-response-marker"
-        return httpx.Response(200, json={"choices": [{
-            "finish_reason": "stop", "message": {"content": json.dumps(data)}
-        }]})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"finish_reason": "stop", "message": {"content": json.dumps(data)}}
+                ]
+            },
+        )
 
     with pytest.raises(InvalidDecision) as caught:
         await QwenPlanner(httpx.MockTransport(reply)).decide(
@@ -509,7 +518,9 @@ async def test_invalid_model_action_reports_fields_without_raw_response(monkeypa
     assert "less_than_equal" in message
     assert "private-response-marker" not in message
     assert "test-key" not in message
-    actions, _ = planning_memory(obs, [{"result": {"status": "rejected", "error": message}}], None)
+    actions, _ = planning_memory(
+        obs, [{"result": {"status": "rejected", "error": message}}], None
+    )
     assert actions[0]["result"]["error"] == message
 
 
@@ -520,12 +531,20 @@ async def test_explicit_pixel_boxes_normalize_without_guessing_or_clamping():
     obs = await SimulatedPort("v", seed=1).observe()
     obs.camera.width, obs.camera.height = 1280, 720
     data = decision(obs).model_dump()
-    data["target"] = {"label": "person", "bbox": [1150, 320, 1160, 330],
-                      "ground_contact_visible": False, "bbox_coordinate_space": "pixels"}
+    data["target"] = {
+        "label": "person",
+        "bbox": [1150, 320, 1160, 330],
+        "ground_contact_visible": False,
+        "bbox_coordinate_space": "pixels",
+    }
     result = parse_decision(json.dumps(data), obs)
-    assert result.target.bbox == pytest.approx([898.4375, 444.4444444, 906.25, 458.3333333])
+    assert result.target.bbox == pytest.approx(
+        [898.4375, 444.4444444, 906.25, 458.3333333]
+    )
     assert "bbox_coordinate_space" not in result.target.model_dump()
-    assert "bbox_coordinate_space" in response_schema()["$defs"]["Detection"]["required"]
+    assert (
+        "bbox_coordinate_space" in response_schema()["$defs"]["Detection"]["required"]
+    )
     data["target"].pop("bbox_coordinate_space")
     with pytest.raises(ValidationError):
         parse_decision(json.dumps(data), obs)

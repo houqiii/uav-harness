@@ -198,3 +198,47 @@ search_move capability, yaw execution preserving position, rejection of
 candidate inspection without a detection, and continued positive coverage
 of magnified-candidate inspection. 53 related tests passed. No native flight
 command was sent by the replay.
+
+### 2026-10-16: candidate-first planning and native yaw emergency descent
+
+Inspected mission 60d22710a6d546109484795d6bb3e5e9 and the existing
+session's native events without creating/resetting a session. No descent
+command occurred: round 9 reached heading 270 at ~50m altitude; round 10
+asked for yaw 90 to finish a scan checklist despite describing a small red
+candidate. Native event 273 reports SAF.CTRL.YAW_ERR (179.398 degrees,
+threshold 90), entering ELAND/CONTROLLED. Event 274 confirms that transition;
+399 records touchdown. Thus this was both an inappropriate planner scan
+priority and an adapter failure to implement a large turn within native
+controller constraints, not a billing/access limit or a planned descent.
+
+The adapter now implements yaw with <=60-degree setpoint segments, waiting
+for measured heading, position and speed after each segment, keeping the
+original position/altitude. It does not change the model's requested final
+heading or disable native safety. Tests cover 270->90, wrapped headings and
+179-degree turns, and require settlement before each subsequent dispatch.
+
+Rewrote planner instructions around visible evidence: no candidate => search
+in place; localized tentative candidate => interrupt scan, centre if needed,
+zoom; magnified candidate => bounded horizontal inspection; confirmed target
+=> range-directed observation. Explicitly distinguish task goal from current
+phase and tentative detection from identity confirmation. Historical evidence
+failures are now labeled completion evidence, not general action blockers.
+Removed the two-observation gate on grounded movement; current-frame geometry
+and distance/fence bounds remain required. Final found acceptance retains its
+confirmation and physical range checks. Missing metric geometry directs the
+planner to candidate inspection rather than redundant observe rituals.
+
+Isolated real Qwen replays, without flight dispatch:
+- Saved failing round 10: now reports a tentative bounding box and aim_target,
+  instead of yaw 90 to complete coverage.
+- Saved magnified round 14: the first rewrite still chose zoom 3.5; after
+  clarifying that the existing 2x image already satisfies magnified inspection,
+  selected inspect_target(15), no visible feet required. Grounded command was
+  NED approximately [4.023,-14.451,0], i.e. current candidate bearing with
+  zero vertical displacement. This uses the real stored image, not scene truth.
+
+Full regression suite: 136 passed. These replays and adapter regression tests
+are not a completed end-to-end native mission. Existing repository-wide lint
+style findings (imports/modernization, etc.) remain outside this fix.
+- Saved empty round 2 under the final prompt: target=null and yaw(120),
+  preserving position rather than inventing candidate-directed translation.

@@ -375,8 +375,12 @@ async def test_yaw_uses_direct_position_hold_while_translation_keeps_path_admiss
         commands.append((name, kwargs))
         return {"status": "accepted"}
 
-    async def wait(*a, **kw):
-        pass
+    async def wait(predicate, **kw):
+        t = telemetry_from_state(wire_state())
+        t.heading_deg = heading_from_enu(commands[-1][1].get("yaw_rad", 0))
+        t.position_ned = enu_to_ned(commands[-1][1]["pos"])
+        assert predicate(t)
+        return t
 
     async def hold():
         pass
@@ -596,9 +600,10 @@ def test_sdk_initial_request_does_not_inherit_broken_shell_proxy(tmp_path, monke
     from uav_harness.drone4d.client import DroneClient
     from uav_harness.drone4d.settings import Drone4DConfig
     import httpx
-    sdk = tmp_path / 'tools/sdk'
+
+    sdk = tmp_path / "tools/sdk"
     sdk.mkdir(parents=True)
-    (sdk / 'awr_sandbox.py').write_text('''
+    (sdk / "awr_sandbox.py").write_text("""
 __version__ = 'test'
 class _Http:
     def get(self, path):
@@ -613,21 +618,71 @@ class Sandbox:
         return self.http.get('/api/sandbox/v1/meta')
     def close(self):
         self.http.client.close()
-''')
-    monkeypatch.setenv('HTTPS_PROXY', 'http://127.0.0.1:10808')
+""")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:10808")
     original = httpx.Client
     calls = []
+
     def client(**kwargs):
         calls.append(kwargs)
-        assert kwargs['trust_env'] is False
-        assert kwargs['verify'] is True
-        return original(**kwargs, transport=httpx.MockTransport(
-            lambda req: httpx.Response(200, json={'api_version': 1})))
-    monkeypatch.setattr(httpx, 'Client', client)
-    c = DroneClient(Drone4DConfig(source_dir=tmp_path), tmp_path / 'state')
+        assert kwargs["trust_env"] is False
+        assert kwargs["verify"] is True
+        return original(
+            **kwargs,
+            transport=httpx.MockTransport(
+                lambda req: httpx.Response(200, json={"api_version": 1})
+            ),
+        )
+
+    monkeypatch.setattr(httpx, "Client", client)
+    c = DroneClient(Drone4DConfig(source_dir=tmp_path), tmp_path / "state")
     try:
-        assert c._connect()['api_version'] == 1
-        assert c.sandbox.initial['api_version'] == 1
+        assert c._connect()["api_version"] == 1
+        assert c.sandbox.initial["api_version"] == 1
         assert len(calls) == 1
     finally:
         c.sandbox.close()
+
+
+@pytest.mark.parametrize("start,end", [(270, 90), (10, 350), (350, 10), (0, 179)])
+async def test_large_yaw_settles_each_segment_without_changing_altitude(start, end):
+    import math
+    from types import SimpleNamespace
+
+    from uav_harness.drone4d.port import Drone4DPort, telemetry_from_state
+
+    p = Drone4DPort(SimpleNamespace(config=SimpleNamespace(speed_mps=3)), "v")
+    t = telemetry_from_state(wire_state())
+    t.heading_deg = start
+    original_position = t.position_ned
+    pending = None
+    segments = []
+
+    async def refresh():
+        return t
+
+    async def command(name, **args):
+        nonlocal pending
+        assert pending is None, "must settle before sending next segment"
+        assert name == "goto" and args["route"] == "direct"
+        assert enu_to_ned(args["pos"]) == original_position
+        heading = heading_from_enu(args["yaw_rad"])
+        assert abs((heading - t.heading_deg + 180) % 360 - 180) <= 60.001
+        pending = heading
+        segments.append(heading)
+        return {"status": "accepted"}
+
+    async def wait(predicate):
+        nonlocal pending
+        t.heading_deg = pending
+        assert predicate(t)
+        pending = None
+        return t
+
+    async def hold():
+        assert abs((end - t.heading_deg + 180) % 360 - 180) < 3
+
+    p.refresh, p.command, p.wait, p.hold = refresh, command, wait, hold
+    result = await p.execute({"action": "yaw", "heading_deg": end})
+    assert len(segments) == math.ceil(abs((end - start + 180) % 360 - 180) / 60)
+    assert result["status"] == "succeeded"

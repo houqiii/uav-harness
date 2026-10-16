@@ -361,15 +361,15 @@ class Mission:
             if (
                 not self.target
                 or not self.target["visible"]
-                or self.target["confirmed_observations"] < 2
+                or self.target.get("observation_id") != obs.observation_id
             ):
                 raise HarnessError(
-                    "target requires two consistent fresh observations before approach"
+                    "approach requires a current visible target; use inspect_target for an ungrounded candidate"
                 )
             geometry = self.target.get("geometry")
             if not geometry:
                 raise HarnessError(
-                    "ground geometry unavailable; observe or request operator input"
+                    "ground geometry unavailable for metric approach; use inspect_target for a visible magnified candidate when enabled"
                 )
             offset = approach_offset(obs, geometry, p, a.step_m)
             target = [x + y for x, y in zip(t.position_ned, offset)]

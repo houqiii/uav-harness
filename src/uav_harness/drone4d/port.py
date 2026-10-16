@@ -330,25 +330,41 @@ class Drone4DPort:
                     "tol_m": 0.5,
                     "route": "direct" if action == "yaw" else "safe_transit",
                 }
-                if action == "yaw":
-                    args["yaw_rad"] = math.atan2(
-                        math.sin(math.radians(90 - cmd["heading_deg"])),
-                        math.cos(math.radians(90 - cmd["heading_deg"])),
-                    )
-                receipt = await self.command("goto", **args)
-                await self.wait(
-                    lambda s: (
-                        math.dist(s.position_ned, target) < 0.8
-                        and math.sqrt(sum(v * v for v in s.velocity_ned)) < 0.4
-                        and (
-                            action != "yaw"
-                            or abs(
-                                (s.heading_deg - cmd["heading_deg"] + 180) % 360 - 180
+                # Native FastGuard treats an instantaneous yaw error >90 degrees
+                # as ELAND. Implement one planner yaw as settled <=60-degree
+                # actuator segments, preserving the original position/altitude.
+                heading = t.heading_deg
+                receipts = []
+                for _ in range(6):
+                    if action == "yaw":
+                        delta = (cmd["heading_deg"] - heading + 180) % 360 - 180
+                        heading = (heading + max(-60, min(60, delta))) % 360
+                        args["yaw_rad"] = math.atan2(
+                            math.sin(math.radians(90 - heading)),
+                            math.cos(math.radians(90 - heading)),
+                        )
+                    receipt = await self.command("goto", **args)
+                    receipts.append(receipt)
+                    settled = await self.wait(
+                        lambda s: (
+                            math.dist(s.position_ned, target) < 0.8
+                            and math.sqrt(sum(v * v for v in s.velocity_ned)) < 0.4
+                            and (
+                                action != "yaw"
+                                or abs((s.heading_deg - heading + 180) % 360 - 180) < 3
                             )
-                            < 3
                         )
                     )
-                )
+                    if action != "yaw":
+                        break
+                    heading = settled.heading_deg
+                    if abs((cmd["heading_deg"] - heading + 180) % 360 - 180) < 3:
+                        receipt = {"segments": receipts}
+                        break
+                else:
+                    raise Uncertain(
+                        "Drone4D segmented yaw did not reach requested heading"
+                    )
             elif action == "gimbal":
                 relative = (
                     0

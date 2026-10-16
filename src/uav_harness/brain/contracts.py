@@ -199,5 +199,8 @@ class Decision(Contract):
     plan: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
         min_length=1, max_length=8
     )
-    target: Detection | None = None
+    target: Detection | None = Field(
+        default=None,
+        description="Current localized candidate, including tiny tentative matches; null only when no candidate is visible. Identity confirmation is not required.",
+    )
     next_action: Tool

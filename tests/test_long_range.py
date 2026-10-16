@@ -152,7 +152,7 @@ async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch
     assert not any(x["action"] in ("move", "takeoff") for x in port.executions)
 
 
-async def test_confirmed_target_can_be_approached_before_any_scan_coverage():
+async def test_current_grounded_target_can_move_without_confirmation_or_scan_ritual():
     port = SimulatedPort("v", seed=1)
     port.position = [0, 0, -50]
     obs = await port.observe()
@@ -162,7 +162,8 @@ async def test_confirmed_target_can_be_approached_before_any_scan_coverage():
     m.resolved_objective = "approach"
     m.target = {
         "visible": True,
-        "confirmed_observations": 2,
+        "confirmed_observations": 1,
+        "observation_id": obs.observation_id,
         "geometry": {
             "position_ned": [100, 0, 0],
             "horizontal_distance_m": 100,
@@ -173,6 +174,13 @@ async def test_confirmed_target_can_be_approached_before_any_scan_coverage():
     command = m.ground_command(obs, proposal(obs, {"action": "approach", "step_m": 10}))
     assert command["action"] == "move"
     assert command["offset_ned"] == pytest.approx((10, 0, 0))
+
+    # Completion is still stricter than permission for the next bounded move.
+    with pytest.raises(HarnessError, match="confirmed"):
+        m.finish("found")
+    m.target["observation_id"] = "old-frame"
+    with pytest.raises(HarnessError, match="current visible"):
+        m.ground_command(obs, proposal(obs, {"action": "approach", "step_m": 10}))
 
 
 async def test_candidate_association_survives_pose_jitter_but_requires_grounding():
@@ -228,7 +236,7 @@ async def test_candidate_association_survives_pose_jitter_but_requires_grounding
             current, proposal(current, {"action": "approach", "step_m": 10})
         )
     _, memory = planning_memory(current, [], m.target)
-    assert memory["previous_observation_blockers"]
+    assert memory["completion_evidence_missing"]
     assert memory["last_sighting_direction"]["directional_only"]
     assert "bbox" not in memory
     assert "historical_geometry" not in memory
@@ -239,7 +247,7 @@ async def test_candidate_association_survives_pose_jitter_but_requires_grounding
     _, memory = planning_memory(lost, [], m.target)
     assert (
         "target_not_visible_in_previous_observation"
-        in memory["previous_observation_blockers"]
+        in memory["completion_evidence_missing"]
     )
     current, decision = frame(5, *samples[-1])
     m.remember_target(current, decision)
