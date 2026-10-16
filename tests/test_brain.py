@@ -130,6 +130,38 @@ async def test_provider_receives_image_telemetry_task_and_history_without_deepse
     assert "position_ned" in json.dumps(content)
 
 
+async def test_motion_history_cannot_supply_a_stale_image_box_as_current_evidence():
+    from uav_harness.brain.provider import planning_memory
+
+    obs = await SimulatedPort("v", seed=1).observe()
+    obs.camera.position_ned = (0, 0, -50)
+    old = {
+        "label": "person",
+        "bbox": [518, 475, 532, 508],
+        "geometry": {"position_ned": [20, 0, 0], "uncertainty_m": 2},
+        "last_seen_at": 1,
+        "observation_id": "old-frame",
+    }
+    history = [
+        {
+            "decision": {
+                "next_action": {"action": "approach", "step_m": 10},
+                "scene_summary": "obsolete box 518 475 532 508",
+                "target": old,
+            },
+            "result": {"status": "succeeded"},
+        }
+    ]
+    actions, memory = planning_memory(obs, history, old)
+    serialized = json.dumps([actions, memory])
+    assert "bbox" not in serialized and "obsolete box" not in serialized
+    assert actions[0]["result"]["status"] == "succeeded"
+    assert memory["camera_aim_hint"]["pitch_deg"] == pytest.approx(
+        -math.degrees(math.atan2(50, 20))
+    )
+    assert memory["camera_aim_hint"]["requires_current_image_confirmation"]
+
+
 async def test_provider_rejects_stale_reference_and_truncated_output(monkeypatch):
     monkeypatch.setenv("DASHSCOPE_API_KEY", "qwen-test-key")
     obs = await SimulatedPort("v", seed=1).observe()
@@ -181,6 +213,33 @@ async def test_runner_replans_from_new_observation_and_actual_action_result():
     assert planner.inputs[2][0].telemetry.position_ned[2] == -20
     assert planner.inputs[1][1][-1]["result"]["status"] == "succeeded"
     assert m.status == "needs_operator"
+
+
+@pytest.mark.parametrize(
+    "pitch,fx,covered", [(-35, 1236, True), (-35, 6000, False), (-5, 1236, False)]
+)
+async def test_search_coverage_requires_a_ground_view_wide_enough_for_scan_step(
+    pitch, fx, covered
+):
+    p = SimulatedPort("v", seed=3)
+    p.position = [0, 0, -50]
+    p.pitch = pitch
+    observe = p.observe
+
+    async def frame():
+        obs = await observe()
+        obs.camera.fx = fx
+        return obs
+
+    p.observe = frame
+    planner = ScriptedPlanner(
+        [lambda o: decision(o, {"action": "finish", "outcome": "needs_operator"})]
+    )
+    mission = Mission(
+        MissionRequest(query="寻找目标", vehicle_id="v"), p, planner, Policy()
+    )
+    await mission.run()
+    assert bool(mission.scanned) is covered
 
 
 async def test_runner_rejects_unconfirmed_target_and_reports_feedback_in_next_round():

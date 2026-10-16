@@ -1083,6 +1083,8 @@
 }
 #sandbox-viewport {
   width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
   aspect-ratio: 16 / 9;
   position: relative;
   overflow: hidden;

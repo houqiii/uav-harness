@@ -37,18 +37,10 @@ def search_scene(source_dir):
                 "motion": {"mode": "static"},
                 "sensitivity": [],
             },
-            {
-                "id": "subject-b",
-                "label": "场景人物 B",
-                "class": "person",
-                "pos": [0.0, -300.0, None],
-                "motion": {"mode": "static"},
-                "sensitivity": [],
-            },
         ],
     }
 
 
 def visual_styles():
     # Appearance is supplied only to the scene renderer, never to the model observation.
-    return {"subject-a": {"hat": "red"}, "subject-b": {"hat": "blue"}}
+    return {"subject-a": {"hat": "red"}}

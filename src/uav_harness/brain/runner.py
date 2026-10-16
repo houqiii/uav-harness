@@ -326,7 +326,14 @@ class Mission:
                 expired = next(iter(self.frames))
                 self.frames.pop(expired)
                 self.frame_detections.pop(expired, None)
-            if obs.telemetry.airborne:
+            horizontal_fov = math.degrees(
+                2 * math.atan(obs.camera.width / (2 * obs.camera.fx))
+            )
+            if (
+                obs.telemetry.airborne
+                and horizontal_fov >= self.policy.scan_step_deg
+                and -60 <= obs.camera.pitch_deg <= -20
+            ):
                 self.scanned.add(int(round(obs.camera.yaw_deg / 30)) % 12 * 30)
             obs.scan_headings_deg = sorted(self.scanned)
             obs.accepted_task_goal = self.resolved_objective

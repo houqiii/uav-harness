@@ -69,6 +69,11 @@ class Camera(Contract):
     position_ned: tuple[float, float, float] | None = None
 
 
+class SearchCameraDefaults(Contract):
+    pitch_deg: float = Field(ge=-85, le=-5)
+    zoom_x: float = Field(ge=1, le=5)
+
+
 class Observation(Contract):
     observation_id: Id
     vehicle_id: Id
@@ -81,6 +86,7 @@ class Observation(Contract):
     fleet: list[dict] = Field(default_factory=list, max_length=32)
     scan_headings_deg: list[int] = Field(default_factory=list, max_length=12)
     accepted_task_goal: Literal["find", "approach"] | None = None
+    search_camera_defaults: SearchCameraDefaults | None = None
 
 
 class Detection(Contract):

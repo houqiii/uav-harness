@@ -152,6 +152,10 @@ class Drone4DPort:
             camera=self.last_camera,
             image=frame["image"],
             source="drone4d_native",
+            search_camera_defaults={
+                "pitch_deg": self.service.config.initial_camera_pitch_deg,
+                "zoom_x": self.service.config.initial_zoom_x,
+            },
             capabilities=[
                 "takeoff",
                 "yaw",
