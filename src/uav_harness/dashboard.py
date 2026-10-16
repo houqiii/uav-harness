@@ -1,5 +1,7 @@
 """Serve hardware, protocol simulation, or hardware-free LLM planning in the same UI."""
 import argparse
+import errno
+import socket
 from pathlib import Path
 import tempfile
 import uvicorn
@@ -22,6 +24,24 @@ def offline_settings(state_dir):
                       'max_height_m': 2 if profile == 'model_bench' else 20}
                      for vid, backend, profile, system, firmware in profiles],
     })
+
+
+def run_server(app, *, host, port):
+    # Reserve the port before application startup opens links or restores sessions.
+    family = socket.AF_INET6 if ':' in host else socket.AF_INET
+    try:
+        listener = socket.create_server((host, port), family=family)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            raise HarnessError(
+                f'{host}:{port} 已被占用。请在原服务终端按 Ctrl+C 并等待退出，'
+                f'或用 --http-port {port + 1 if port < 65535 else 8080} 启动另一端口。'
+                f'查看占用进程：lsof -nP -iTCP:{port} -sTCP:LISTEN'
+            ) from None
+        raise
+    with listener:
+        config = uvicorn.Config(app, host=host, port=port, workers=1)
+        uvicorn.Server(config).run(sockets=[listener])
 
 
 def main():
@@ -71,7 +91,7 @@ def main():
               '实机链路：网页点击执行后才派发控制动作。', flush=True)
         print(f'网页控制台：http://{settings.api_host}:{settings.api_port}' + ('/#sandbox' if args.sandbox else '/#hardware'), flush=True)
         print('关闭服务请按 Ctrl+C；等待已有任务收尾。', flush=True)
-        uvicorn.run(create_app(settings, offline=offline), host=settings.api_host, port=settings.api_port, workers=1)
+        run_server(create_app(settings, offline=offline), host=settings.api_host, port=settings.api_port)
 
     try:
         if args.mock:
@@ -79,6 +99,8 @@ def main():
                 serve(folder)
         else:
             serve(args.state_dir)
+    except KeyboardInterrupt:
+        print("服务已退出，HTTP 端口已释放。", flush=True)
     except (HarnessError, OSError, ValueError) as exc:
         parser.exit(1, f'[ERROR] {exc}\n')
 

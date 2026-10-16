@@ -106,6 +106,19 @@ def test_launcher_opens_preview_without_usb(tmp_path, monkeypatch, extra_args):
             assert brain['mode'] == ('hardware_disconnected' if enabled else 'geometric_simulation')
             assert all(v['execution_enabled'] is not enabled for v in brain['vehicles'])
             served.append(state)
-    monkeypatch.setattr(dashboard.uvicorn, 'run', serve)
+    monkeypatch.setattr(dashboard, 'run_server', serve)
     dashboard.main()
     assert len(served) == 1
+
+
+def test_occupied_port_does_not_start_application(monkeypatch):
+    import socket
+    from uav_harness import dashboard
+    from uav_harness.errors import HarnessError
+    with socket.create_server(('127.0.0.1', 0)) as occupied:
+        port = occupied.getsockname()[1]
+        def unexpected(*args, **kwargs):
+            raise AssertionError('must not start services on an occupied port')
+        monkeypatch.setattr(dashboard.uvicorn, 'Server', unexpected)
+        with pytest.raises(HarnessError, match='已被占用'):
+            dashboard.run_server(None, host='127.0.0.1', port=port)
