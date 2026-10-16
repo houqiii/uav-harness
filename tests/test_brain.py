@@ -511,3 +511,25 @@ async def test_invalid_model_action_reports_fields_without_raw_response(monkeypa
     assert "test-key" not in message
     actions, _ = planning_memory(obs, [{"result": {"status": "rejected", "error": message}}], None)
     assert actions[0]["result"]["error"] == message
+
+
+async def test_explicit_pixel_boxes_normalize_without_guessing_or_clamping():
+    from pydantic import ValidationError
+    from uav_harness.brain.provider import parse_decision, response_schema
+
+    obs = await SimulatedPort("v", seed=1).observe()
+    obs.camera.width, obs.camera.height = 1280, 720
+    data = decision(obs).model_dump()
+    data["target"] = {"label": "person", "bbox": [1150, 320, 1160, 330],
+                      "ground_contact_visible": False, "bbox_coordinate_space": "pixels"}
+    result = parse_decision(json.dumps(data), obs)
+    assert result.target.bbox == pytest.approx([898.4375, 444.4444444, 906.25, 458.3333333])
+    assert "bbox_coordinate_space" not in result.target.model_dump()
+    assert "bbox_coordinate_space" in response_schema()["$defs"]["Detection"]["required"]
+    data["target"].pop("bbox_coordinate_space")
+    with pytest.raises(ValidationError):
+        parse_decision(json.dumps(data), obs)
+    data["target"]["bbox_coordinate_space"] = "pixels"
+    data["target"]["bbox"][2] = 1300
+    with pytest.raises(ValidationError):
+        parse_decision(json.dumps(data), obs)

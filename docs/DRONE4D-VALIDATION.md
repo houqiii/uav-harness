@@ -62,3 +62,25 @@ camera direction, model prompts, and autonomous action selection are unchanged.
 This verifies native DSM line of sight; it does not establish VLM recognition
 success or a completed online mission. Restart the backend and create/reset
 the sandbox to apply the new placements to an existing session.
+
+### 2026-10-16: isolated replay of model validation failure
+
+Replayed the saved final observation from mission
+`d4bfbf5ca00445aa9b936b38f5469d5d` (frame
+`7b952ddea00240c899599b0b11fd9bb9`), with recorded action/result context.
+No sandbox commands were dispatched. This is a reproduction, not recovery of
+an originally discarded response.
+
+The first live Qwen call with the previous prompt reproduced `target.bbox`
+validation failure: `[1150, 320, 1160, 330]` was expressed in pixels for a
+1280×720 image, while the internal contract required 0–1000 coordinates.
+The second call with the explicit coordinate-space schema returned a valid
+pixel box and a valid gimbal action. The adapter normalized the box to
+`[898.4375, 416.6667, 910.15625, 444.4444]` before internal validation.
+
+The model-facing schema now requests `bbox_coordinate_space` (`pixels` or
+`normalized_1000`). Only explicitly tagged pixels are converted. Untagged
+legacy boxes retain the normalized convention; ambiguous or out-of-bounds
+boxes are rejected, never guessed or clamped. Unit tests cover conversion,
+legacy rejection and bounds enforcement. This verifies the format fix,
+not task completion or correctness of the proposed camera motion.

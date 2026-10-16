@@ -59,7 +59,11 @@ If recent_actions_and_actual_results contains a rejected format validation, corr
 Return a JSON object, no Markdown fences. Use exactly one next_action object with action-specific fields:
 zoom uses zoom_x (1..5), approach uses step_m (0..30], yaw uses heading_deg [0..360),
 gimbal uses pitch_deg [-85..-5] and optional yaw_deg [0..360). Do not combine multiple actions in one object.
-All bbox coordinates use [left,top,right,bottom] scaled 0..1000 on THIS image. Ground contact must actually be visible.
+Every non-null target must include bbox_coordinate_space: "pixels" or "normalized_1000".
+Prefer pixels: bbox is [left,top,right,bottom] in the supplied image's original width and height from observation.camera.
+For normalized_1000, scale x by 1000/image_width and y by 1000/image_height; never put pixel values in that format.
+For a 1280x720 image, pixel box [1100,200,1200,300] is valid ONLY with bbox_coordinate_space="pixels".
+Ground contact must actually be visible.
 Re-measure the bbox in the CURRENT image every round. Never copy a box from target memory, history or a previous scene description.
 Historical target geometry and camera_aim_hint are only reacquisition hints, not evidence that the target is currently visible.
 If the target is clipped or absent, set target=null (or ground_contact_visible=false if partly visible), aim the camera to reacquire it,
@@ -188,6 +192,41 @@ def planning_memory(obs, history, target):
     return actions, memory
 
 
+def response_schema():
+    schema = Decision.model_json_schema()
+    detection = schema["$defs"]["Detection"]
+    detection["properties"]["bbox_coordinate_space"] = {
+        "type": "string", "enum": ["pixels", "normalized_1000"],
+        "description": "Explicit units of bbox in the current original image",
+    }
+    detection["required"].append("bbox_coordinate_space")
+    return schema
+
+
+def parse_decision(raw, obs):
+    """Convert explicitly tagged image pixels at the model boundary only.
+
+    Untagged legacy responses remain normalized; never guess units or clamp boxes.
+    All runner/geometry consumers continue to receive normalized 0..1000 boxes.
+    """
+    data = json.loads(raw)
+    if isinstance(data, dict) and isinstance(data.get("target"), dict):
+        target = data["target"]
+        units = target.pop("bbox_coordinate_space", "normalized_1000")
+        if units not in ("pixels", "normalized_1000"):
+            raise InvalidDecision("target.bbox_coordinate_space must be pixels or normalized_1000; no action dispatched")
+        if units == "pixels":
+            box = target.get("bbox")
+            if not isinstance(box, list) or len(box) != 4 or any(
+                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in box
+            ):
+                raise InvalidDecision("target.bbox must contain four finite pixel coordinates; no action dispatched")
+            target["bbox"] = [v * 1000 / size for v, size in zip(
+                box, (obs.camera.width, obs.camera.height, obs.camera.width, obs.camera.height)
+            )]
+    return Decision.model_validate(data)
+
+
 class QwenPlanner:
     def __init__(self, http_transport=None):
         self.http_transport = http_transport
@@ -204,7 +243,7 @@ class QwenPlanner:
             "policy": policy.model_dump(),
             "recent_actions_and_actual_results": actions,
             "target_memory": memory,
-            "schema": Decision.model_json_schema(),
+            "schema": response_schema(),
         }
         body = {
             "model": settings["model"],
@@ -292,10 +331,12 @@ class QwenPlanner:
                                     }
                                 ),
                             )
-            decision = Decision.model_validate_json(raw)
+            decision = parse_decision(raw, obs)
             if decision.observation_id != obs.observation_id:
                 raise HarnessError("VLM decision references a different observation")
             return decision
+        except RetryablePlannerError:
+            raise
         except HarnessError as exc:
             raise HarnessError(str(exc).replace("DeepSeek", "Qwen VLM")) from None
         except TimeoutError:
