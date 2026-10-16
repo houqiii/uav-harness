@@ -313,3 +313,78 @@ def test_world_aim_compensates_for_body_attitude():
     actual = [body[i] + 2 * q[3] * uv[i] + 2 * uuv[i] for i in range(3)]
     assert math.degrees(math.atan2(actual[0], actual[1])) % 360 == pytest.approx(284.1)
     assert math.degrees(math.asin(actual[2])) == pytest.approx(-22.5)
+
+
+async def test_visible_magnified_candidate_can_move_without_feet_but_cannot_finish():
+    from uav_harness.brain.contracts import Detection
+
+    port = SimulatedPort("v", seed=1)
+    port.position = [0, 0, -50]
+    obs = await port.observe()
+    obs.capabilities.append("inspect_target")
+    obs.camera = obs.camera.model_copy(
+        update={"zoom_x": 2, "yaw_deg": 90, "pitch_deg": -20}
+    )
+    policy = Policy(
+        allow_candidate_inspection=True,
+        inspection_step_m=15,
+        stand_off_m=30,
+        max_step_m=30,
+    )
+    m = Mission(MissionRequest(query="接近", vehicle_id="v"), port, None, policy)
+    m.resolved_objective = "approach"
+    d = proposal(obs, {"action": "inspect_target", "distance_m": 15})
+    d.target = Detection(
+        label="疑似人员", bbox=[490, 490, 510, 510], ground_contact_visible=False
+    )
+    m.remember_target(obs, d)
+    cmd = m.ground_command(obs, d)
+    assert cmd["offset_ned"] == pytest.approx((0, 15, 0))
+    await port.execute(cmd)
+    assert port.position == pytest.approx([0, 15, -50])
+    assert m.target["geometry"] is None
+    with pytest.raises(HarnessError):
+        m.finish("found")
+    m.policy.allow_candidate_inspection = False
+    with pytest.raises(HarnessError, match="enabled sandbox policy"):
+        m.ground_command(obs, d)
+    m.policy.allow_candidate_inspection = True
+    obs.camera.zoom_x = 1
+    with pytest.raises(HarnessError, match="magnify"):
+        m.ground_command(obs, d)
+    obs.camera.zoom_x = 2
+    d.target = None
+    with pytest.raises(HarnessError, match="current-image"):
+        m.ground_command(obs, d)
+
+
+async def test_inspection_standoff_horizon_and_fence_bounds():
+    from uav_harness.brain.contracts import Detection
+    from uav_harness.brain.geometry import inspection_offset
+
+    port = SimulatedPort("v", seed=1)
+    port.position = [0, 0, -50]
+    obs = await port.observe()
+    obs.capabilities.append("inspect_target")
+    obs.camera = obs.camera.model_copy(update={"zoom_x": 2, "pitch_deg": -1})
+    policy = Policy(allow_candidate_inspection=True, stand_off_m=30, max_radius_m=5)
+    target = Detection(
+        label="candidate", bbox=[490, 490, 510, 510], ground_contact_visible=False
+    )
+    with pytest.raises(HarnessError, match="ray unsuitable"):
+        inspection_offset(obs, target, policy, 15)
+    obs.camera.pitch_deg = -65
+    with pytest.raises(HarnessError, match="too close"):
+        inspection_offset(obs, target, policy, 15)
+    obs.camera.pitch_deg = -20
+    m = Mission(MissionRequest(query="接近", vehicle_id="v"), port, None, policy)
+    m.resolved_objective = "approach"
+    d = proposal(obs, {"action": "inspect_target", "distance_m": 15})
+    d.target = target
+    m.remember_target(obs, d)
+    with pytest.raises(HarnessError, match="local radius"):
+        m.ground_command(obs, d)
+    policy.max_radius_m = 100
+    m.resolved_objective = "find"
+    with pytest.raises(HarnessError, match="approach mission"):
+        m.ground_command(obs, d)

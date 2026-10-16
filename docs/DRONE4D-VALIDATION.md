@@ -139,3 +139,39 @@ prior action/result context and the new capability, selected `aim_target`
 and a tentative bbox instead of another zoom. No flight command was
 executed during replay. Full native camera-motion/approach success remains
 to be verified online; this record does not claim an end-to-end pass.
+
+### 2026-10-16: active perception before visible-foot confirmation
+
+Cancelled mission `c57394d7456f41d28cd98bc3a62dcd2b` kept a plausible red/white
+candidate visible while rounds 11–15 repeatedly selected aim_target. All
+reported no visible ground contact, which blocked the existing approach tool.
+Aiming could not add the missing image detail. Spatial confirmation also
+varied as the tiny-box estimates oscillated between views.
+
+Added model-selected `inspect_target(distance_m<=15)` under an explicit
+candidate-inspection policy, enabled by default for the Drone4D sandbox only.
+It needs a current magnified (>=1.5x) candidate detection, an airborne approach
+mission, calibrated ground and a usable downward ray; it does not require
+feet or a two-observation confirmation. It makes a horizontal movement then
+returns to the normal fresh-image loop. Find-only goals and lost detections
+cannot use it. No target truth is used.
+
+The step is bounded by the requested distance, policy step, geofence, altitude
+and a conservative horizontal-range lower bound. For this sandbox's ground
+person scenario, the bound subtracts ground uncertainty and 3m possible entity
+height, adds 2 degrees of ray error, and retains the horizontal standoff.
+This is an explicit scenario assumption, not a range measurement or generic
+hardware guarantee. Inspection does not populate target geometry and cannot
+satisfy final monitoring-distance acceptance. Normal grounded approach and
+finish requirements remain unchanged.
+
+Replaced accumulated prompt rules with ordered action priorities and added
+feedback about consecutive camera-only actions. Three isolated live calls
+used the saved round-14 frame and reconstructed action/result context:
+the first instruction revision still chose aim_target, the compact prompt
+chose zoom 3x, and with explicit active-perception feedback the model chose
+inspect_target(15). Grounding yielded a horizontal NED offset approximately
+[3.477, -14.591, 0]. No native flight action was dispatched during replay.
+Regression tests exercise simulated movement, missing-feet acceptance,
+disabled policy, find-only goals, unzoomed/lost detections, horizon, near-target
+and geofence rejection. This is not an end-to-end native mission success.

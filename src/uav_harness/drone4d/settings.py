@@ -29,6 +29,7 @@ class Drone4DConfig(Contract):
     scene_seed: int = Field(default=17, ge=0, le=2**32 - 1)
     mission_policy: Policy = Field(
         default_factory=lambda: Policy(
+            allow_candidate_inspection=True,
             stand_off_m=30,
             monitor_radius_m=50,
             distance_metric="slant",

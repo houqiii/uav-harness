@@ -33,6 +33,7 @@ const actions = {
   aim_target: "对准候选目标",
   zoom: "光学变焦",
   approach: "接近目标",
+  inspect_target: "接近候选并复查",
   altitude: "调整高度",
   hold: "保持位置",
   finish: "结束任务",

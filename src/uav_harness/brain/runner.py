@@ -4,7 +4,7 @@ import asyncio
 import math
 import time
 import uuid
-from .geometry import ground_target, approach_offset, candidate_ray
+from .geometry import ground_target, approach_offset, candidate_ray, inspection_offset
 from .provider import RetryablePlannerError
 from ..errors import HarnessError, Uncertain
 
@@ -314,6 +314,41 @@ class Mission:
                     raise HarnessError(
                         "zoom would crop the current candidate; call aim_target to centre it before magnifying"
                     )
+        if a.action == "inspect_target":
+            if self.resolved_objective != "approach" or not t.airborne:
+                raise HarnessError(
+                    "candidate inspection requires an airborne approach mission"
+                )
+            if (
+                not decision.target
+                or not self.target
+                or not self.target.get("visible")
+                or self.target.get("observation_id") != obs.observation_id
+            ):
+                raise HarnessError(
+                    "candidate inspection requires a fresh current-image detection"
+                )
+            offset = inspection_offset(obs, decision.target, p, a.distance_m)
+            endpoint = [v + d for v, d in zip(t.position_ned, offset)]
+            if (
+                math.hypot(endpoint[0] - t.home_north_m, endpoint[1] - t.home_east_m)
+                > p.max_radius_m
+            ):
+                raise HarnessError("inspection outside configured local radius")
+            if (
+                not p.min_altitude_m
+                <= t.home_down_m - t.position_ned[2]
+                <= p.max_altitude_m
+            ):
+                raise HarnessError("inspection altitude outside mission bounds")
+            if self.target.get("geometry"):
+                known = self.target["geometry"]
+                if (
+                    math.dist(endpoint[:2], known["position_ned"][:2])
+                    < p.stand_off_m + known["uncertainty_m"]
+                ):
+                    raise HarnessError("inspection would violate known target standoff")
+            return {"action": "move", "offset_ned": offset}
         if a.action == "approach":
             if self.resolved_objective != "approach":
                 raise HarnessError(

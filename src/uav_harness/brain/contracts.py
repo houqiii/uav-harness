@@ -6,6 +6,8 @@ from ..contracts import Contract, Id
 
 
 class Policy(Contract):
+    allow_candidate_inspection: bool = False
+    inspection_step_m: float = Field(default=15, gt=0, le=15)
     search_altitude_m: float = Field(default=50, gt=0, le=100)
     min_altitude_m: float = Field(default=10, gt=0, le=100)
     max_altitude_m: float = Field(default=80, gt=0, le=100)
@@ -143,6 +145,11 @@ class Approach(Contract):
     step_m: float = Field(gt=0, le=30)
 
 
+class InspectTarget(Contract):
+    action: Literal["inspect_target"]
+    distance_m: float = Field(gt=0, le=15)
+
+
 class SearchMove(Contract):
     action: Literal["search_move"]
     heading_deg: float = Field(ge=0, lt=360)
@@ -173,6 +180,7 @@ Tool = Annotated[
         AimTarget,
         Zoom,
         Approach,
+        InspectTarget,
         SearchMove,
         Altitude,
         Hold,

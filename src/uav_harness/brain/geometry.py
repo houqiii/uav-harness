@@ -107,3 +107,40 @@ def approach_offset(obs, target, policy, requested):
         target["position_ned"][i] - obs.telemetry.position_ned[i] for i in (0, 1)
     )
     return (north / distance * step, east / distance * step, 0)
+
+
+def inspection_offset(obs, detection, policy, requested):
+    """Sandbox-only active perception under explicit ground/person assumptions.
+
+    A ray to a <=3m tall ground person plus 2deg angular error gives a
+    conservative horizontal lower bound. This is NOT target localization and
+    must never satisfy completion or replace visible-ground projection.
+    """
+    c = obs.camera
+    if not policy.allow_candidate_inspection or c.ground_down_m is None:
+        raise HarnessError(
+            "candidate inspection requires enabled sandbox policy and calibrated ground"
+        )
+    if not c.zoom_x or c.zoom_x < 1.5:
+        raise HarnessError("magnify the visible candidate before inspection motion")
+    ray = candidate_ray(obs, detection)
+    horizontal = math.hypot(ray[0], ray[1])
+    depression = math.atan2(ray[2], horizontal)
+    if not math.radians(5) <= depression <= math.radians(70):
+        raise HarnessError("candidate ray unsuitable for bounded inspection")
+    origin = c.position_ned or obs.telemetry.position_ned
+    available_height = c.ground_down_m - origin[2] - c.ground_uncertainty_m - 3
+    if available_height <= 0:
+        raise HarnessError("insufficient height bound for candidate inspection")
+    lower_range = available_height / math.tan(depression + math.radians(2))
+    step = min(
+        requested,
+        policy.inspection_step_m,
+        policy.max_step_m,
+        lower_range - policy.stand_off_m,
+    )
+    if step < 0.3:
+        raise HarnessError(
+            "candidate too close for ungrounded inspection; obtain range evidence or hold"
+        )
+    return (ray[0] / horizontal * step, ray[1] / horizontal * step, 0)

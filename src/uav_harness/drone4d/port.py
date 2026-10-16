@@ -204,7 +204,12 @@ class Drone4DPort:
                 "hold",
                 "finish",
             ]
-            + (["zoom"] if self.zoom_available() else []),
+            + (["zoom"] if self.zoom_available() else [])
+            + (
+                ["inspect_target"]
+                if self.service.config.mission_policy.allow_candidate_inspection
+                else []
+            ),
         )
 
     async def command(self, name, **args):
