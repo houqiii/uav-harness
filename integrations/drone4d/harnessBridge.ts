@@ -152,10 +152,10 @@ async function poll() {
       world_id: vp.worldId,
       camera_mode: camera.mode,
     });
-    if (requests.size && ready()) {
-      const request = requests.values().next().value!;
-      selection.select([request.vehicle_id]);
-      sensorView.set("eo", { enterFpv: true });
+    if (ready()) {
+      const request = requests.values().next().value;
+      selection.select([request?.vehicle_id || config.vehicle_ids[0]]);
+      if (camera.mode !== "fpv") sensorView.set("eo", { enterFpv: true });
       viewport.requestFrame();
     }
   } catch (e) {
