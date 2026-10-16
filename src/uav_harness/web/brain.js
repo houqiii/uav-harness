@@ -36,6 +36,7 @@ const actions = {
   hold: "保持位置",
   finish: "结束任务",
   move: "执行几何计算后的移动",
+  search_move: "探索移动",
 };
 let backend =
   location.hash === "#hardware" || location.hash === "#console"
@@ -372,8 +373,12 @@ function render() {
       : "当前不可见"
     : "未知";
   $("demo-bearing").textContent = g ? fmt(g.bearing_deg, 0) + "°" : "—";
+  const slant = (s?.policy || metadata?.policy)?.distance_metric === "slant";
+  $("demo-distance-label").textContent = slant
+    ? "三维距离（估计）"
+    : "水平距离（估计）";
   $("demo-distance").textContent = g
-    ? fmt(g.horizontal_distance_m) + " m"
+    ? fmt(slant ? g.slant_distance_m : g.horizontal_distance_m) + " m"
     : "—";
   $("brain-uncertainty").textContent = g
     ? "± " + fmt(g.uncertainty_m) + " m"
@@ -837,6 +842,24 @@ export function initBrainUI() {
   });
   window.addEventListener("drone4d-changed", () => {
     if (backend === "sandbox") metadata = null;
+  });
+  window.addEventListener("drone4d-reset", () => {
+    sessionStorage.removeItem("brain.currentMission.sandbox");
+    if (backend !== "sandbox") return;
+    backendEpoch++;
+    currentId = null;
+    current = null;
+    preview = null;
+    metadata = null;
+    online = false;
+    selectedFrame = null;
+    frameSignature = "";
+    eventSequence = 0;
+    viewVersion++;
+    busy = false;
+    $("demo-intent").value = $("demo-intent").defaultValue;
+    error();
+    render();
   });
   window.addEventListener("hashchange", view);
   view();

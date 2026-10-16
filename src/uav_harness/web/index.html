@@ -41,6 +41,18 @@
           </p>
         </div>
         <div class="sandbox-actions">
+          <label class="helper" for="sandbox-seed">场景种子</label>
+          <input
+            id="sandbox-seed"
+            type="number"
+            min="0"
+            max="4294967295"
+            value="17"
+            style="width: 90px"
+          />
+          <button id="sandbox-reset" class="button secondary" disabled>
+            重置远距场景
+          </button>
           <button id="sandbox-connect" class="button primary">
             创建独立沙盒</button
           ><button id="sandbox-disconnect" class="button secondary" disabled>
@@ -72,6 +84,10 @@
           >独立窗口查看原生世界</a
         >
       </div>
+      <p id="sandbox-evaluation" class="helper">
+        远距任务：300 米以外起步，由 VLM 自主移动并下降到人物三维距离 50
+        米内悬停。评测真值不发送给 VLM。
+      </p>
     </section>
     <main id="demo-console" class="demo-grid">
       <div class="demo-left">
@@ -85,7 +101,7 @@
             <input
               id="demo-intent"
               maxlength="5000"
-              value="帮我找一个戴着红帽子的人，接近到观察位置后悬停"
+              value="帮我找一个戴着红帽子的人，自主规划搜索、移动和高度，直到与他三维距离50米以内，然后悬停监控。"
               autocomplete="off"
             />
             <button id="brain-preview" class="button secondary" type="button">
@@ -138,7 +154,7 @@
                   <dd id="demo-bearing">—</dd>
                 </div>
                 <div>
-                  <dt>水平距离</dt>
+                  <dt id="demo-distance-label">目标距离（估计）</dt>
                   <dd id="demo-distance">—</dd>
                 </div>
                 <div>

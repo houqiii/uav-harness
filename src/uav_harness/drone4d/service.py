@@ -3,6 +3,8 @@
 import asyncio
 import math
 import logging
+import json
+import httpx
 import time
 from ..brain.service import BrainService
 from ..brain.provider import provider_settings
@@ -12,6 +14,8 @@ from .capture import CaptureBroker
 from .client import DroneClient
 from .port import Drone4DPort
 from .scene import search_scene, visual_styles
+from .evaluation import EpisodeEvaluation
+from ..brain.runner import TERMINAL
 
 
 class Drone4DService(BrainService):
@@ -30,6 +34,9 @@ class Drone4DService(BrainService):
         self.lifecycle_lock = asyncio.Lock()
         self._last_poll_error = None
         self.bridge_tokens = set()
+        self._truth_target_ned = None
+        self._evaluations = {}
+        self._episode_mid = None
 
     def session_metadata(self):
         s = self.client.session
@@ -57,6 +64,13 @@ class Drone4DService(BrainService):
                 {"vehicle_id": vid, "telemetry": self.safe_telemetry(p)}
                 for vid, p in self.ports.items()
             ],
+            "scene_seed": self.config.scene_seed,
+            "evaluation": self._evaluations[self._episode_mid].snapshot(
+                self.missions[self._episode_mid].status
+            )
+            if self._episode_mid in self._evaluations
+            and self._episode_mid in self.missions
+            else None,
         }
 
     @staticmethod
@@ -70,7 +84,7 @@ class Drone4DService(BrainService):
         return {
             "provider": provider_settings(),
             "mode": "drone4d",
-            "policy": self.harness.settings.brain.policy.model_dump(),
+            "policy": self.config.mission_policy.model_dump(),
             "vehicles": [
                 {
                     "vehicle_id": vid,
@@ -113,7 +127,9 @@ class Drone4DService(BrainService):
         try:
             if not self.client.session:
                 self.remote_meta = await self.client.connect()
-            await self.client.create(search_scene(self.config.source_dir))
+            await self.client.create(
+                search_scene(self.config.source_dir, self.config.scene_seed)
+            )
             self.info = await self.client.call(self.client.session.state)
             items = await self.client.call(self.client.session.vehicles.list)
             self.ports = {v["id"]: Drone4DPort(self, v["id"]) for v in items["items"]}
@@ -142,6 +158,7 @@ class Drone4DService(BrainService):
                     yaw_rad=0,
                 )
                 await p.command("zoom", sensor="eo", zoom_x=self.config.initial_zoom_x)
+            await self.load_evaluation_target()
             self.state = "ready"
             self.poll_task = asyncio.create_task(self.poll())
         except Exception as exc:
@@ -164,6 +181,13 @@ class Drone4DService(BrainService):
                 for p in list(self.ports.values()):
                     await p.refresh()
                     await p.renew_payload()
+                    for mid, m in self.missions.items():
+                        if (
+                            m.request.vehicle_id == p.vehicle_id
+                            and m.status not in TERMINAL
+                            and mid in self._evaluations
+                        ):
+                            self._evaluations[mid].update(p.telemetry())
                 if tick % 20 == 0:
                     await self.client.call(self.client.renew_if_due)
                     self.info = await self.client.call(self.client.session.state)
@@ -214,15 +238,85 @@ class Drone4DService(BrainService):
                 request,
                 port,
                 self.planner,
-                self.harness.settings.brain.policy.model_copy(deep=True),
+                self.config.mission_policy.model_copy(deep=True),
             )
             self.missions[m.mission_id] = m
             self.owners[request.vehicle_id] = m.mission_id
             m.fleet_context = self.fleet
             m.frame_prefix = "/v1/sandbox/brain"
+            if self._truth_target_ned and m.policy.monitor_radius_m:
+                evaluation = EpisodeEvaluation(
+                    self._truth_target_ned, port.telemetry(), m.policy.monitor_radius_m
+                )
+                self._evaluations[m.mission_id] = evaluation
+                self._episode_mid = m.mission_id
+                m.evaluation = lambda: evaluation.snapshot(m.status)
             m.task = asyncio.create_task(self.run(m))
             self.prune()
             return m.snapshot()
+
+    async def load_evaluation_target(self):
+        self._truth_target_ned = None
+        try:
+            row = await self.client.call(self.client.session.targets.get, "subject-a")
+            e, n, z = row["pos"]
+            if z is None:
+                response = await self.client.call(
+                    self.client.native_request,
+                    "POST",
+                    f"/api/world/{self.config.world_id}/query",
+                    headers={},
+                    params={},
+                    content=json.dumps(
+                        {"op": "ground_dtm", "points": [[e, n]]}
+                    ).encode(),
+                )
+                response.raise_for_status()
+                z = response.json()["z_m"][0]
+            if z is not None:
+                self._truth_target_ned = (n, e, -z)
+        except (
+            HarnessError,
+            httpx.HTTPError,
+            AttributeError,
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
+            # Missing scoring data is reported as unavailable, never fabricated.
+            pass
+
+    async def run(self, m):
+        try:
+            await super().run(m)
+        finally:
+            if m.mission_id in self._evaluations:
+                try:
+                    self._evaluations[m.mission_id].update(m.port.telemetry())
+                except HarnessError:
+                    pass
+
+    async def reset(self, seed):
+        async with self.lifecycle_lock:
+            if self.state != "ready" or not self.client.session:
+                raise HarnessError("先连接沙盒，再重置场景")
+            await super().close()
+            if self.poll_task:
+                self.poll_task.cancel()
+                await asyncio.gather(self.poll_task, return_exceptions=True)
+            self.config.scene_seed = seed
+            await self.client.call(
+                self.client.session.restore, search_scene(self.config.source_dir, seed)
+            )
+            await self.client.call(self.client.session.clock, "play")
+            self.ports = {}
+            self.owners.clear()
+            self.preview_frames.clear()
+            self._episode_mid = None
+            self.capture.last_renderer_at = 0
+            self.state = "connecting"
+            self.connect_task = asyncio.create_task(self._connect())
+            return self.session_metadata()
 
     async def preview(self, vid):
         async with self.lifecycle_lock:

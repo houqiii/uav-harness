@@ -5,6 +5,7 @@ import math
 import time
 import uuid
 from .geometry import ground_target, approach_offset
+from .provider import InvalidDecision
 from ..errors import HarnessError, Uncertain
 
 
@@ -48,6 +49,9 @@ class Mission:
         self.resolved_objective = None
         self.control_lock = asyncio.Lock()
         self.ended_at = None
+        self.visited_positions = []
+        self.evaluation = None  # Operator-only; never included in model observations.
+        self.invalid_decisions = 0
 
     def event(self, kind, message, **data):
         self.event_sequence += 1
@@ -79,6 +83,7 @@ class Mission:
             "vehicle_id": self.request.vehicle_id,
             "objective": self.request.objective,
             "resolved_objective": self.resolved_objective,
+            "evaluation": self.evaluation() if callable(self.evaluation) else None,
             "mode": self.port.mode,
             "status": self.status,
             "round": self.round,
@@ -205,6 +210,51 @@ class Mission:
             return a.model_dump()
         if a.action in ("yaw", "gimbal", "approach") and not t.airborne:
             raise HarnessError("take off before airborne search tools")
+        if a.action == "search_move":
+            if not t.airborne:
+                raise HarnessError("take off before exploratory translation")
+            if (
+                self.resolved_objective == "find"
+                and self.target
+                and self.target.get("confirmed_observations", 0) >= 2
+            ):
+                raise HarnessError(
+                    "find-only target already confirmed; hold and report instead of translating"
+                )
+            step = min(a.distance_m, p.max_step_m)
+            angle = math.radians(a.heading_deg)
+            offset = (step * math.cos(angle), step * math.sin(angle), 0)
+            endpoint = [v + d for v, d in zip(t.position_ned, offset)]
+            known = self.target.get("geometry") if self.target else None
+            if known:
+                a0 = t.position_ned[:2]
+                delta = offset[:2]
+                target2 = known["position_ned"][:2]
+                fraction = min(
+                    1,
+                    max(
+                        0,
+                        sum((q - a) * d for q, a, d in zip(target2, a0, delta))
+                        / (step * step),
+                    ),
+                )
+                closest = [a + fraction * d for a, d in zip(a0, delta)]
+                if math.dist(closest, target2) < p.stand_off_m + known["uncertainty_m"]:
+                    raise HarnessError(
+                        "exploration would cross known target safety standoff"
+                    )
+            if (
+                math.hypot(endpoint[0] - t.home_north_m, endpoint[1] - t.home_east_m)
+                > p.max_radius_m
+            ):
+                raise HarnessError("exploration outside configured local radius")
+            if (
+                not p.min_altitude_m
+                <= t.home_down_m - t.position_ned[2]
+                <= p.max_altitude_m
+            ):
+                raise HarnessError("exploration altitude outside mission bounds")
+            return {"action": "move", "offset_ned": offset}
         if a.action == "approach":
             if self.resolved_objective != "approach":
                 raise HarnessError(
@@ -245,7 +295,21 @@ class Mission:
                 )
             if self.resolved_objective == "approach":
                 g = self.target.get("geometry")
-                if (
+                if self.policy.monitor_radius_m is not None:
+                    key = (
+                        "slant_distance_m"
+                        if self.policy.distance_metric == "slant"
+                        else "horizontal_distance_m"
+                    )
+                    if (
+                        not g
+                        or g.get(key, float("inf")) + g["uncertainty_m"]
+                        > self.policy.monitor_radius_m
+                    ):
+                        raise HarnessError(
+                            "monitoring distance not reached; move and/or adjust altitude using fresh observations"
+                        )
+                elif (
                     not g
                     or g["horizontal_distance_m"]
                     > self.policy.stand_off_m + g["uncertainty_m"] + 3
@@ -332,11 +396,19 @@ class Mission:
             if (
                 obs.telemetry.airborne
                 and horizontal_fov >= self.policy.scan_step_deg
-                and -60 <= obs.camera.pitch_deg <= -20
+                and -60 <= obs.camera.pitch_deg <= -10
             ):
                 self.scanned.add(int(round(obs.camera.yaw_deg / 30)) % 12 * 30)
             obs.scan_headings_deg = sorted(self.scanned)
             obs.accepted_task_goal = self.resolved_objective
+            if (
+                not self.visited_positions
+                or math.dist(obs.telemetry.position_ned, self.visited_positions[-1])
+                >= 10
+            ):
+                self.visited_positions.append(obs.telemetry.position_ned)
+                self.visited_positions = self.visited_positions[-64:]
+            obs.visited_positions_ned = list(self.visited_positions)
             self.event(
                 "observation",
                 "取得新图像与拍摄时遥测",
@@ -347,14 +419,27 @@ class Mission:
             self.status = "thinking"
             self.progress = {"phase": "waiting"}
             self.round += 1
-            d = await self.planner.decide(
-                self.request.query + "\nTask objective: " + self.request.objective,
-                obs,
-                self.policy,
-                self.history,
-                self.target,
-                lambda e: self.progress.update(e),
-            )
+            try:
+                d = await self.planner.decide(
+                    self.request.query + "\nTask objective: " + self.request.objective,
+                    obs,
+                    self.policy,
+                    self.history,
+                    self.target,
+                    lambda e: self.progress.update(e),
+                )
+                self.invalid_decisions = 0
+            except InvalidDecision as exc:
+                self.invalid_decisions += 1
+                self.event("rejected", str(exc))
+                if self.invalid_decisions > 2:
+                    raise
+                self.history.append(
+                    {"result": {"status": "rejected", "error": str(exc)}}
+                )
+                self.history = self.history[-8:]
+                await self.port.hold()
+                continue
             if self.stop_reason:
                 raise asyncio.CancelledError()
             self.decision = d

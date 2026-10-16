@@ -87,6 +87,7 @@ class SimulatedPort:
                 "yaw",
                 "gimbal",
                 "approach",
+                "search_move",
                 "altitude",
                 "hold",
                 "observe",

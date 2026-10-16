@@ -13,9 +13,11 @@ class Policy(Contract):
     max_step_m: float = Field(default=10, gt=0, le=30)
     stand_off_m: float = Field(default=20, ge=10, le=100)
     max_radius_m: float = Field(default=250, gt=0, le=500)
-    max_rounds: int = Field(default=40, ge=1, le=100)
+    max_rounds: int = Field(default=60, ge=1, le=100)
     max_duration_s: float = Field(default=900, gt=0, le=1800)
     max_observation_age_s: float = Field(default=30, gt=0, le=60)
+    monitor_radius_m: float | None = Field(default=None, ge=10, le=100)
+    distance_metric: Literal["horizontal", "slant"] = "horizontal"
 
     @model_validator(mode="after")
     def altitude_bounds(self):
@@ -87,6 +89,9 @@ class Observation(Contract):
     scan_headings_deg: list[int] = Field(default_factory=list, max_length=12)
     accepted_task_goal: Literal["find", "approach"] | None = None
     search_camera_defaults: SearchCameraDefaults | None = None
+    visited_positions_ned: list[tuple[float, float, float]] = Field(
+        default_factory=list, max_length=64
+    )
 
 
 class Detection(Contract):
@@ -133,6 +138,12 @@ class Approach(Contract):
     step_m: float = Field(gt=0, le=30)
 
 
+class SearchMove(Contract):
+    action: Literal["search_move"]
+    heading_deg: float = Field(ge=0, lt=360)
+    distance_m: float = Field(gt=0, le=30)
+
+
 class Altitude(Contract):
     action: Literal["altitude"]
     altitude_m: float = Field(gt=0, le=100)
@@ -149,7 +160,18 @@ class Finish(Contract):
 
 
 Tool = Annotated[
-    Union[Observe, Takeoff, Yaw, Gimbal, Zoom, Approach, Altitude, Hold, Finish],
+    Union[
+        Observe,
+        Takeoff,
+        Yaw,
+        Gimbal,
+        Zoom,
+        Approach,
+        SearchMove,
+        Altitude,
+        Hold,
+        Finish,
+    ],
     Field(discriminator="action"),
 ]
 

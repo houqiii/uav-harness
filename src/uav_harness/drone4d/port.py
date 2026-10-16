@@ -162,6 +162,7 @@ class Drone4DPort:
                 "gimbal",
                 "altitude",
                 "approach",
+                "search_move",
                 "observe",
                 "hold",
                 "finish",

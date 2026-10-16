@@ -15,6 +15,10 @@ class PreviewRequest(Contract):
     vehicle_id: Id
 
 
+class ResetRequest(Contract):
+    seed: int = 17
+
+
 def register_routes(app, settings):
     def service():
         return app.state.sandbox
@@ -37,6 +41,12 @@ def register_routes(app, settings):
     @app.post("/v1/sandbox/disconnect")
     async def disconnect_sandbox():
         return await service().disconnect()
+
+    @app.post("/v1/sandbox/reset", status_code=202)
+    async def reset_sandbox(body: ResetRequest):
+        if not 0 <= body.seed <= 2**32 - 1:
+            raise HTTPException(422, "seed outside range")
+        return await service().reset(body.seed)
 
     @app.get("/v1/sandbox/bridge")
     async def bridge_config():

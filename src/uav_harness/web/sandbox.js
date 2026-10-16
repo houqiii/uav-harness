@@ -21,6 +21,12 @@ function render() {
     busy || !state.enabled || ["ready", "connecting"].includes(state.state);
   $("sandbox-disconnect").disabled =
     busy || !(state.sid || state.state === "connecting");
+  $("sandbox-reset").disabled = busy || !ready;
+  $("sandbox-seed").disabled = busy || state.state === "connecting";
+  const evaluation = state.evaluation;
+  $("sandbox-evaluation").textContent = evaluation
+    ? `实测评估（不发送给 VLM）：起始 ${evaluation.initial_distance_m.toFixed(1)} m · 当前三维距离 ${evaluation.current_slant_distance_m.toFixed(1)} m · 实飞路径 ${evaluation.flown_path_m.toFixed(1)} m · ${evaluation.passed ? "验收通过：50 米内悬停" : evaluation.initial_distance_m < 300 ? "本轮起点不足 300 米，请重置远距场景" : "尚未通过远距任务验收"}`
+    : "远距任务：300 米以外起步，由 VLM 自主规划到人物三维距离 50 米以内悬停。评测真值不发送给 VLM。";
   $("sandbox-error").hidden = !state.error && state.enabled && state.web_ready;
   $("sandbox-error").textContent =
     state.error ||
@@ -103,6 +109,24 @@ export function initSandbox() {
     } catch (e) {
       $("sandbox-error").hidden = false;
       $("sandbox-error").textContent = e.message;
+    } finally {
+      busy = false;
+      render();
+    }
+  };
+  $("sandbox-reset").onclick = async () => {
+    const seed = Number($("sandbox-seed").value);
+    if (!Number.isInteger(seed) || seed < 0 || seed > 4294967295) return;
+    busy = true;
+    render();
+    try {
+      state = await request("/v1/sandbox/reset", {
+        body: { seed },
+        timeout: 150000,
+      });
+      window.dispatchEvent(new Event("drone4d-reset"));
+    } catch (e) {
+      state.error = e.message;
     } finally {
       busy = false;
       render();

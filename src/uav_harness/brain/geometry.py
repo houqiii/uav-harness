@@ -66,6 +66,7 @@ def ground_target(obs, detection):
     return {
         "position_ned": position,
         "horizontal_distance_m": distance,
+        "slant_distance_m": math.dist(position, obs.telemetry.position_ned),
         "uncertainty_m": uncertainty,
         "bearing_deg": math.degrees(
             math.atan2(

@@ -137,6 +137,7 @@ async def test_motion_history_cannot_supply_a_stale_image_box_as_current_evidenc
     obs.camera.position_ned = (0, 0, -50)
     old = {
         "label": "person",
+        "confirmed_observations": 3,
         "bbox": [518, 475, 532, 508],
         "geometry": {"position_ned": [20, 0, 0], "uncertainty_m": 2},
         "last_seen_at": 1,
@@ -160,6 +161,7 @@ async def test_motion_history_cannot_supply_a_stale_image_box_as_current_evidenc
         -math.degrees(math.atan2(50, 20))
     )
     assert memory["camera_aim_hint"]["requires_current_image_confirmation"]
+    assert memory["confirmed_observations"] == 3
 
 
 async def test_provider_rejects_stale_reference_and_truncated_output(monkeypatch):

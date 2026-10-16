@@ -462,7 +462,7 @@ async def test_camera_setup_waits_for_vehicle_ready_not_only_session_ready(
     from uav_harness.drone4d.service import Drone4DService
     from uav_harness.dashboard import offline_settings
 
-    monkeypatch.setattr("uav_harness.drone4d.service.search_scene", lambda _: {})
+    monkeypatch.setattr("uav_harness.drone4d.service.search_scene", lambda *args: {})
     s = Drone4DService(SimpleNamespace(settings=offline_settings(tmp_path)))
     updates = 0
     commands = []

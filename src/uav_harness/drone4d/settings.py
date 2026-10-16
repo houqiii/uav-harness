@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from pydantic import Field, model_validator
 from ..contracts import Contract
+from ..brain.contracts import Policy
 
 
 class Drone4DConfig(Contract):
@@ -22,9 +23,21 @@ class Drone4DConfig(Contract):
     capture_timeout_s: float = Field(default=30, gt=0, le=90)
     admission_timeout_s: float = Field(default=1200, gt=0, le=3600)
     action_timeout_s: float = Field(default=120, gt=0, le=300)
-    initial_camera_pitch_deg: float = Field(default=-35, ge=-85, le=-5)
-    initial_zoom_x: float = Field(default=1.5, ge=1, le=2)
-    speed_mps: float = Field(default=3, gt=0, le=8)
+    initial_camera_pitch_deg: float = Field(default=-15, ge=-85, le=-5)
+    initial_zoom_x: float = Field(default=1, ge=1, le=2)
+    speed_mps: float = Field(default=5, gt=0, le=8)
+    scene_seed: int = Field(default=17, ge=0, le=2**32 - 1)
+    mission_policy: Policy = Field(
+        default_factory=lambda: Policy(
+            stand_off_m=30,
+            monitor_radius_m=50,
+            distance_metric="slant",
+            max_step_m=30,
+            max_radius_m=450,
+            max_rounds=100,
+            max_duration_s=1800,
+        )
+    )
 
     @model_validator(mode="after")
     def endpoint(self):

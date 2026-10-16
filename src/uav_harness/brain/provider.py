@@ -74,7 +74,16 @@ If a target moves toward the bottom edge during approach, tilt further downward 
 If a candidate is too small to identify or see its feet, centre it with yaw/gimbal, then use optical zoom when available;
 reduce zoom when a target is clipped. An uncertain patch is a candidate, not a confirmed person.
 When a target is seen once, observe again or adjust gimbal to confirm; approach requires two consistent fresh observations.
+target_memory.confirmed_observations is the controller's accepted consecutive confirmation count. If it is at least 2 and the CURRENT
+image still shows the same grounded target, you may approach without repeating observe. A new frame does not reset that count by itself.
 Choose approach, altitude adjustment, further observation or hold from actual feedback. Altitude changes must obey policy;
+If search_move is available, you may explore at your chosen compass heading and bounded distance even before identifying a target.
+Plan exploration from current views, home/geofence, visited_positions_ned and actual tool results; no target coordinates are supplied.
+A local 360-degree scan is not area coverage. If the goal is still unresolved, consider moving to a new viewing station rather than repeating the same scan.
+policy.monitor_radius_m is a physical completion requirement. Zoom changes visibility, never physical distance.
+When distance_metric=slant, altitude contributes to person distance: flying at 50m altitude does not put a person within 50m
+unless horizontal separation is essentially zero. Plan translations and safe altitude changes yourself to satisfy the 3D bound.
+stand_off_m is the minimum horizontal safety margin, distinct from the maximum monitoring radius.
 unknown ground clearance blocks descent. If a target leaves view, use its last observed bearing and adjust the gimbal pitch
 toward its last grounded position, then observe again. Do not continue approaching a lost/ambiguous target.
 For objective=find, do not approach or descend toward a target: confirm, hold and finish found.
@@ -86,6 +95,10 @@ This is an RGB simulation camera: do not infer a missing color capability just b
 Only available capabilities may be called. If genuinely blocked, finish needs_operator and explain the missing observation/capability.
 Use Chinese for task_interpretation, scene_summary and plan. Use numeric values and exact enum names in tool arguments.
 """
+
+
+class InvalidDecision(HarnessError):
+    pass
 
 
 def planning_memory(obs, history, target):
@@ -102,7 +115,12 @@ def planning_memory(obs, history, target):
     if target:
         memory = {
             k: target[k]
-            for k in ("label", "last_seen_at", "observation_id")
+            for k in (
+                "label",
+                "last_seen_at",
+                "observation_id",
+                "confirmed_observations",
+            )
             if k in target
         }
         geometry = target.get("geometry")
@@ -233,7 +251,11 @@ class QwenPlanner:
             raise HarnessError(
                 "Qwen VLM generation deadline exceeded; no action dispatched"
             ) from None
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError) as exc:
+        except httpx.HTTPError as exc:
             raise HarnessError(
+                f"Qwen VLM network error: {type(exc).__name__}; no action dispatched"
+            ) from None
+        except (ValueError, KeyError, TypeError, IndexError) as exc:
+            raise InvalidDecision(
                 f"Qwen VLM response invalid: {type(exc).__name__}; no action dispatched"
             ) from None
