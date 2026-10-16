@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from uav_harness.brain.contracts import Decision, MissionRequest, Policy, Telemetry
-from uav_harness.brain.provider import InvalidDecision
+from uav_harness.brain.provider import InvalidDecision, RetryablePlannerError
 from uav_harness.brain.runner import Mission
 from uav_harness.brain.simulation import SimulatedPort
 from uav_harness.drone4d.evaluation import EpisodeEvaluation
@@ -122,7 +122,8 @@ def test_seed_changes_scene_but_never_inserts_a_preplanned_route(tmp_path):
     assert search_scene(tmp_path, 17) == search_scene(tmp_path, 17)
 
 
-async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch():
+@pytest.mark.parametrize("failure", [InvalidDecision, RetryablePlannerError])
+async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch(failure):
     port = SimulatedPort("v", seed=1)
     seen = []
 
@@ -130,7 +131,7 @@ async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch
         async def decide(self, q, obs, *args):
             seen.append(obs.observation_id)
             if len(seen) < 3:
-                raise InvalidDecision("invalid JSON; no action dispatched")
+                raise failure("transient planning failure; no action dispatched")
             return proposal(obs, {"action": "finish", "outcome": "needs_operator"})
 
     m = Mission(MissionRequest(query="监控", vehicle_id="v"), port, Planner(), Policy())

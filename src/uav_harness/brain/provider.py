@@ -97,7 +97,11 @@ Use Chinese for task_interpretation, scene_summary and plan. Use numeric values 
 """
 
 
-class InvalidDecision(HarnessError):
+class RetryablePlannerError(HarnessError):
+    pass
+
+
+class InvalidDecision(RetryablePlannerError):
     pass
 
 
@@ -189,7 +193,7 @@ class QwenPlanner:
                 async with self.slots:
                     progress({"phase": "connecting", "elapsed_s": 0})
                     async with httpx.AsyncClient(
-                        timeout=httpx.Timeout(25, connect=5),
+                        timeout=httpx.Timeout(25, connect=10),
                         trust_env=False,
                         follow_redirects=False,
                         transport=self.http_transport,
@@ -248,11 +252,11 @@ class QwenPlanner:
         except HarnessError as exc:
             raise HarnessError(str(exc).replace("DeepSeek", "Qwen VLM")) from None
         except TimeoutError:
-            raise HarnessError(
+            raise RetryablePlannerError(
                 "Qwen VLM generation deadline exceeded; no action dispatched"
             ) from None
         except httpx.HTTPError as exc:
-            raise HarnessError(
+            raise RetryablePlannerError(
                 f"Qwen VLM network error: {type(exc).__name__}; no action dispatched"
             ) from None
         except (ValueError, KeyError, TypeError, IndexError) as exc:

@@ -5,7 +5,7 @@ import math
 import time
 import uuid
 from .geometry import ground_target, approach_offset
-from .provider import InvalidDecision
+from .provider import RetryablePlannerError
 from ..errors import HarnessError, Uncertain
 
 
@@ -429,7 +429,7 @@ class Mission:
                     lambda e: self.progress.update(e),
                 )
                 self.invalid_decisions = 0
-            except InvalidDecision as exc:
+            except RetryablePlannerError as exc:
                 self.invalid_decisions += 1
                 self.event("rejected", str(exc))
                 if self.invalid_decisions > 2:
