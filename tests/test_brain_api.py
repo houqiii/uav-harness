@@ -61,6 +61,9 @@ def test_online_api_runs_real_multimodal_loop_without_mavlink_jobs(
             time.sleep(0.02)
         assert state["status"] == "needs_operator"
         assert len(seen) == 2 and seen[1]["telemetry"]["position_ned"][2] == -30
+        assert seen[0]["scan_headings_deg"] == []
+        assert len(seen[1]["scan_headings_deg"]) == 1
+        assert seen[1]["accepted_task_goal"] == "find"
         assert state["observation"]["image_url"].startswith("/v1/brain/")
         image = client.get(state["observation"]["image_url"])
         assert (

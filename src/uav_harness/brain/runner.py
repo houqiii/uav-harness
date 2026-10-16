@@ -44,6 +44,7 @@ class Mission:
         self.fleet_context = []
         self.event_sequence = 0
         self.frame_detections = {}
+        self.frame_prefix = "/v1/brain"
         self.resolved_objective = None
         self.control_lock = asyncio.Lock()
         self.ended_at = None
@@ -66,7 +67,7 @@ class Mission:
         observation = obs.model_dump() if obs else None
         if observation:
             observation["image_url"] = (
-                f"/v1/brain/missions/{self.mission_id}/frames/{obs.observation_id}"
+                f"{self.frame_prefix}/missions/{self.mission_id}/frames/{obs.observation_id}"
             )
         try:
             live = self.port.telemetry().model_dump()
@@ -100,7 +101,7 @@ class Mission:
                     "camera": f.camera.model_dump(),
                     "source": f.source,
                     "detection": self.frame_detections.get(f.observation_id),
-                    "image_url": f"/v1/brain/missions/{self.mission_id}/frames/{f.observation_id}",
+                    "image_url": f"{self.frame_prefix}/missions/{self.mission_id}/frames/{f.observation_id}",
                 }
                 for f in self.frames.values()
             ],
@@ -327,6 +328,8 @@ class Mission:
                 self.frame_detections.pop(expired, None)
             if obs.telemetry.airborne:
                 self.scanned.add(int(round(obs.camera.yaw_deg / 30)) % 12 * 30)
+            obs.scan_headings_deg = sorted(self.scanned)
+            obs.accepted_task_goal = self.resolved_objective
             self.event(
                 "observation",
                 "取得新图像与拍摄时遥测",

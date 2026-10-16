@@ -77,8 +77,10 @@ class Observation(Contract):
     camera: Camera
     image: bytes = Field(repr=False, exclude=True)
     capabilities: list[str]
-    source: Literal["geometric_simulation", "http_camera"]
+    source: Literal["geometric_simulation", "http_camera", "drone4d_native"]
     fleet: list[dict] = Field(default_factory=list, max_length=32)
+    scan_headings_deg: list[int] = Field(default_factory=list, max_length=12)
+    accepted_task_goal: Literal["find", "approach"] | None = None
 
 
 class Detection(Contract):
@@ -115,6 +117,11 @@ class Gimbal(Contract):
     yaw_deg: float | None = Field(default=None, ge=0, lt=360)
 
 
+class Zoom(Contract):
+    action: Literal["zoom"]
+    zoom_x: float = Field(ge=1, le=5)
+
+
 class Approach(Contract):
     action: Literal["approach"]
     step_m: float = Field(gt=0, le=30)
@@ -136,7 +143,7 @@ class Finish(Contract):
 
 
 Tool = Annotated[
-    Union[Observe, Takeoff, Yaw, Gimbal, Approach, Altitude, Hold, Finish],
+    Union[Observe, Takeoff, Yaw, Gimbal, Zoom, Approach, Altitude, Hold, Finish],
     Field(discriminator="action"),
 ]
 

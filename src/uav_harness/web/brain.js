@@ -30,16 +30,36 @@ const actions = {
   takeoff: "起飞",
   yaw: "调整航向",
   gimbal: "调整云台",
+  zoom: "光学变焦",
   approach: "接近目标",
   altitude: "调整高度",
   hold: "保持位置",
   finish: "结束任务",
   move: "执行几何计算后的移动",
 };
+let backend =
+  location.hash === "#hardware" || location.hash === "#console"
+    ? "hardware"
+    : "sandbox";
+let backendEpoch = 0;
+const storageKey = () => `brain.currentMission.${backend}`;
+const prefix = () =>
+  backend === "sandbox" ? "/v1/sandbox/brain" : "/v1/brain";
+async function brainRequest(path = "", options) {
+  const epoch = backendEpoch;
+  const result = await request(prefix() + path, options);
+  if (epoch !== backendEpoch) {
+    const error = new Error("workspace switched");
+    error.obsolete = true;
+    throw error;
+  }
+  return result;
+}
+let sandboxTelemetry = null;
 let metadata = null,
   current = null,
   preview = null,
-  currentId = sessionStorage.getItem("brain.currentMission"),
+  currentId = sessionStorage.getItem(storageKey()),
   online = false,
   busy = false,
   selectedFrame = null,
@@ -128,6 +148,7 @@ function buttons() {
     !online ||
     !metadata?.provider.configured ||
     !v?.camera_configured ||
+    (backend === "sandbox" && !metadata?.sandbox?.renderer_ready) ||
     !$("demo-intent").value.trim();
   $("demo-start").textContent = v?.execution_enabled ? "启动闭环" : "单轮规划";
   $("brain-preview").disabled =
@@ -149,7 +170,10 @@ function metric(id, value, unit) {
   );
 }
 async function imageURL(path) {
-  if (!path?.startsWith("/v1/brain/")) throw new Error("图像路径无效");
+  if (
+    !(path?.startsWith("/v1/brain/") || path?.startsWith("/v1/sandbox/brain/"))
+  )
+    throw new Error("图像路径无效");
   if (urls.has(path)) return urls.get(path);
   if (pending.has(path)) return pending.get(path);
   const fetcher = (async () => {
@@ -268,13 +292,19 @@ function renderCamera() {
   $("brain-image-age").textContent =
     `${Math.max(0, Math.floor(Date.now() / 1000 - f.captured_at))} s 前`;
   $("brain-camera-source").textContent =
-    f.source === "geometric_simulation" ? "几何仿真 · 非实拍" : "HTTP 相机观测";
+    f.source === "drone4d_native"
+      ? "Drone4D 原生 FPV · 仿真"
+      : f.source === "geometric_simulation"
+        ? "几何仿真 · 非实拍"
+        : "HTTP 相机观测";
   $("demo-camera-source").textContent =
     f.camera.timing === "camera_timestamp"
       ? "相机时间戳"
-      : f.source === "geometric_simulation"
-        ? "动态渲染"
-        : "接收时间估计";
+      : f.source === "drone4d_native"
+        ? "原生渲染帧"
+        : f.source === "geometric_simulation"
+          ? "动态渲染"
+          : "接收时间估计";
   $("demo-camera-caption").textContent = d
     ? d.label
     : current?.status === "thinking"
@@ -307,7 +337,10 @@ function renderCamera() {
 function render() {
   const s = current,
     obs = s?.observation || preview,
-    t = s?.live_telemetry || obs?.telemetry,
+    t =
+      (backend === "sandbox" && sandboxTelemetry) ||
+      s?.live_telemetry ||
+      obs?.telemetry,
     target = s?.target,
     g = target?.geometry;
   $("demo-phase").textContent = s ? states[s.status] || s.status : "等待任务";
@@ -364,7 +397,11 @@ function render() {
     $("brain-telemetry-source").replaceChildren(
       element("i"),
       document.createTextNode(
-        t.source.includes("simulation") ? "运动学仿真" : "MAVLink 遥测",
+        t.source.includes("drone4d")
+          ? "Drone4D 物理遥测"
+          : t.source.includes("simulation")
+            ? "运动学仿真"
+            : "MAVLink 遥测",
       ),
     );
   }
@@ -486,13 +523,14 @@ function render() {
 }
 async function previewFrame() {
   if (active()) return;
+  const generation = backendEpoch;
   busy = true;
   buttons();
   error();
   try {
-    preview = await request("/v1/brain/preview", {
+    preview = await brainRequest("/preview", {
       body: { vehicle_id: $("brain-vehicle").value },
-      timeout: 10000,
+      timeout: backend === "sandbox" ? 40000 : 10000,
     });
     current = null;
     selectedFrame = null;
@@ -500,19 +538,23 @@ async function previewFrame() {
     eventSequence = 0;
     render();
   } catch (e) {
+    if (e.obsolete) return;
     error(e.message);
   } finally {
-    busy = false;
-    buttons();
+    if (generation === backendEpoch) {
+      busy = false;
+      buttons();
+    }
   }
 }
 async function start() {
   if (busy || active()) return;
+  const generation = backendEpoch;
   busy = true;
   buttons();
   error();
   try {
-    current = await request("/v1/brain/missions", {
+    current = await brainRequest("/missions", {
       body: {
         query: $("demo-intent").value.trim(),
         vehicle_id: $("brain-vehicle").value,
@@ -520,40 +562,47 @@ async function start() {
       },
     });
     currentId = current.mission_id;
-    sessionStorage.setItem("brain.currentMission", currentId);
+    sessionStorage.setItem(storageKey(), currentId);
     selectedFrame = null;
     frameSignature = "";
     eventSequence = 0;
     render();
   } catch (e) {
+    if (e.obsolete) return;
     error(e.message);
   } finally {
-    busy = false;
-    buttons();
+    if (generation === backendEpoch) {
+      busy = false;
+      buttons();
+    }
   }
 }
 async function control(action) {
   if (!currentId || busy) return;
+  const generation = backendEpoch;
   busy = true;
   buttons();
   error();
   try {
-    current = await request(`/v1/brain/missions/${currentId}/${action}`, {
+    current = await brainRequest(`/missions/${currentId}/${action}`, {
       body: {},
       timeout: 150000,
     });
     render();
   } catch (e) {
+    if (e.obsolete) return;
     error(e.message);
   } finally {
-    busy = false;
-    buttons();
+    if (generation === backendEpoch) {
+      busy = false;
+      buttons();
+    }
   }
 }
 async function poll() {
   try {
     if (!metadata || !online) {
-      metadata = await request("/v1/brain");
+      metadata = await brainRequest();
       online = true;
       const picker = $("brain-vehicle");
       picker.replaceChildren(
@@ -572,22 +621,33 @@ async function poll() {
         metadata.missions.find((m) => !terminal.has(m.status));
       if (restore) {
         currentId = restore.mission_id;
-        sessionStorage.setItem("brain.currentMission", currentId);
+        sessionStorage.setItem(storageKey(), currentId);
         picker.value = restore.vehicle_id;
       } else {
         currentId = null;
-        sessionStorage.removeItem("brain.currentMission");
+        sessionStorage.removeItem(storageKey());
       }
       const sim = metadata.mode === "geometric_simulation";
       $("brain-mode").replaceChildren(
         element("i"),
-        document.createTextNode(sim ? "几何仿真 · 真实 VLM" : "实机图像与遥测"),
+        document.createTextNode(
+          metadata.mode === "drone4d"
+            ? "Drone4D · VLM 在线规划"
+            : metadata.mode === "hardware_disconnected"
+              ? "实机接口待连接"
+              : sim
+                ? "几何仿真 · 真实 VLM"
+                : "实机图像与遥测",
+        ),
       );
-      $("brain-control-note").textContent = sim
-        ? "执行器：运动学仿真"
-        : metadata.hardware_control_enabled
-          ? "实机执行已配置"
-          : "观察模式 · 不执行";
+      $("brain-control-note").textContent =
+        metadata.mode === "drone4d"
+          ? "执行器：Drone4D 原生物理与云台"
+          : sim
+            ? "执行器：运动学仿真"
+            : metadata.hardware_control_enabled
+              ? "实机执行已配置"
+              : "观察模式 · 不执行";
       $("demo-source").textContent =
         `${metadata.provider.provider} / ${metadata.provider.model} · ${metadata.provider.configured ? "密钥已配置" : "未配置 DASHSCOPE_API_KEY"}`;
       $("brain-provider").textContent = metadata.provider.endpoint;
@@ -596,10 +656,17 @@ async function poll() {
         null,
         2,
       );
-      if (!currentId && picker.value) await previewFrame();
+      if (
+        !currentId &&
+        picker.value &&
+        metadata.vehicles.find((v) => v.vehicle_id === picker.value)
+          ?.camera_configured &&
+        (backend !== "sandbox" || metadata.sandbox.renderer_ready)
+      )
+        await previewFrame();
     }
     if (currentId) {
-      current = await request(`/v1/brain/missions/${currentId}`);
+      current = await brainRequest(`/missions/${currentId}`);
       online = true;
       $("demo-intent").value = current.query;
       $("brain-vehicle").value = current.vehicle_id;
@@ -607,13 +674,14 @@ async function poll() {
       render();
     } else render();
   } catch (e) {
+    if (e.obsolete) return;
     online = false;
     error(e.message);
     if (e.message.includes("mission not found")) {
       currentId = null;
       current = null;
       metadata = null;
-      sessionStorage.removeItem("brain.currentMission");
+      sessionStorage.removeItem(storageKey());
     }
     buttons();
   } finally {
@@ -656,7 +724,7 @@ export function initBrainUI() {
     if (current && !active()) {
       current = null;
       currentId = null;
-      sessionStorage.removeItem("brain.currentMission");
+      sessionStorage.removeItem(storageKey());
       selectedFrame = null;
       frameSignature = "";
       eventSequence = 0;
@@ -671,7 +739,7 @@ export function initBrainUI() {
     preview = null;
     selectedFrame = null;
     frameSignature = "";
-    sessionStorage.removeItem("brain.currentMission");
+    sessionStorage.removeItem(storageKey());
     previewFrame();
   };
   $("demo-camera-live").onclick = () => {
@@ -679,26 +747,67 @@ export function initBrainUI() {
     renderCamera();
   };
   function view() {
-    const console = location.hash === "#console";
-    $("demo-console").hidden = console;
-    $("demo-footer").hidden = console;
-    $("control-console").hidden = !console;
-    $("control-footer").hidden = !console;
+    const consoleView = location.hash === "#console";
+    const nextBackend =
+      location.hash === "#hardware" || consoleView ? "hardware" : "sandbox";
+    if (nextBackend !== backend) {
+      backend = nextBackend;
+      backendEpoch++;
+      metadata = null;
+      online = false;
+      current = null;
+      preview = null;
+      currentId = sessionStorage.getItem(storageKey());
+      busy = false;
+      selectedFrame = null;
+      frameSignature = "";
+      eventSequence = 0;
+      viewVersion++;
+      $("demo-camera-image").hidden = true;
+      $("demo-box").hidden = true;
+      $("brain-camera-empty").hidden = false;
+      $("brain-camera-empty").textContent = "等待此工作区的新观测";
+      error();
+      render();
+    }
+    $("demo-title").textContent =
+      backend === "sandbox" ? "沙盒在线意图任务" : "实机意图控制";
+    $("demo-console").hidden = consoleView;
+    $("demo-footer").hidden = consoleView;
+    $("control-console").hidden = !consoleView;
+    $("control-footer").hidden = !consoleView;
     for (const [id, on] of [
-      ["demo-tab", !console],
-      ["console-tab", console],
+      ["demo-tab", backend === "sandbox"],
+      ["hardware-tab", backend === "hardware" && !consoleView],
+      ["console-tab", consoleView],
     ]) {
       $(id).classList.toggle("selected", on);
       if (on) $(id).setAttribute("aria-current", "page");
       else $(id).removeAttribute("aria-current");
     }
+    window.dispatchEvent(
+      new CustomEvent("brain-workspace", { detail: { backend } }),
+    );
   }
   $("demo-tab").onclick = () => {
-    location.hash = "brain";
+    location.hash = "sandbox";
+  };
+  $("hardware-tab").onclick = () => {
+    location.hash = "hardware";
   };
   $("console-tab").onclick = () => {
     location.hash = "console";
   };
+  window.addEventListener("drone4d-state", (event) => {
+    sandboxTelemetry =
+      event.detail.vehicles.find(
+        (v) => v.vehicle_id === $("brain-vehicle").value,
+      )?.telemetry || null;
+    if (backend === "sandbox") render();
+  });
+  window.addEventListener("drone4d-changed", () => {
+    if (backend === "sandbox") metadata = null;
+  });
   window.addEventListener("hashchange", view);
   view();
   render();

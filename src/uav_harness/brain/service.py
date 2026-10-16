@@ -23,6 +23,7 @@ class BrainService:
 
     def metadata(self):
         settings = self.harness.settings
+        disconnected = self.offline and settings.drone4d.enabled
         vehicles = []
         for vid, s in self.harness.sessions.items():
             if s.config.profile != "flight":
@@ -34,18 +35,18 @@ class BrainService:
                 {
                     "vehicle_id": vid,
                     "backend": s.config.backend,
-                    "camera_configured": bool(camera) or self.offline,
+                    "camera_configured": (bool(camera) or self.offline) and not disconnected,
                     "hardware_height_limit_m": s.config.max_height_m,
-                    "execution_enabled": self.offline
+                    "execution_enabled": not disconnected and (self.offline
                     or (
                         settings.allow_control and settings.brain.allow_hardware_control
-                    ),
+                    )),
                     "mission_id": self.owners.get(vid),
                 }
             )
         return {
             "provider": provider_settings(),
-            "mode": "geometric_simulation" if self.offline else "hardware",
+            "mode": "hardware_disconnected" if disconnected else "geometric_simulation" if self.offline else "hardware",
             "policy": settings.brain.policy.model_dump(),
             "vehicles": vehicles,
             "missions": [m.snapshot() for m in list(self.missions.values())[-12:]],
@@ -56,6 +57,8 @@ class BrainService:
         }
 
     def port(self, vid, owner, seed=None):
+        if self.offline and self.harness.settings.drone4d.enabled:
+            raise HarnessError("实机接口尚未连接；请切换沙盒仿真，或使用真实飞控配置启动")
         s = self.harness.sessions.get(vid)
         if not s or s.config.profile != "flight":
             raise HarnessError(

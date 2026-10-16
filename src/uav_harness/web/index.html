@@ -25,12 +25,54 @@
     </header>
     <nav class="view-nav" aria-label="工作区">
       <button id="demo-tab" class="view-tab selected" aria-current="page">
-        VLM 在线任务
+        沙盒仿真
       </button>
-      <button id="console-tab" class="view-tab">指令工作台</button>
-      <span class="helper">PX4 飞控适配 · 载荷待接入</span>
+      <button id="hardware-tab" class="view-tab">实机控制</button>
+      <button id="console-tab" class="view-tab">原子指令工作台</button>
+      <span class="helper">同一 VLM 闭环 · 沙盒与实机分别执行</span>
     </nav>
     <div id="notice" class="notice" role="status" hidden></div>
+    <section id="sandbox-panel" class="panel sandbox-panel" hidden>
+      <div class="section-head">
+        <div>
+          <h2>Drone4D 独立沙盒</h2>
+          <p id="sandbox-status" class="helper">
+            连接后由沙盒提供物理、世界和云台视图
+          </p>
+        </div>
+        <div class="sandbox-actions">
+          <button id="sandbox-connect" class="button primary">
+            创建独立沙盒</button
+          ><button id="sandbox-disconnect" class="button secondary" disabled>
+            结束沙盒
+          </button>
+        </div>
+      </div>
+      <p id="sandbox-error" class="form-error" role="status" hidden></p>
+      <div id="sandbox-view-empty" class="sandbox-view-empty">
+        在原生城市世界中运行：起飞 → 环视采集 → 视觉确认 → 分段接近 →
+        保持观察间距。所有动作由 Drone4D 实际仿真状态确认。
+      </div>
+      <div id="sandbox-viewport" hidden>
+        <iframe
+          id="sandbox-world"
+          title="Drone4D 原生世界与云台视图"
+          allow="fullscreen"
+          hidden
+        ></iframe>
+      </div>
+      <div class="sandbox-info">
+        <span id="sandbox-session">尚未分配会话</span
+        ><span id="sandbox-renderer">云台图像导出器未连接</span
+        ><a
+          id="sandbox-native-link"
+          href="/world/synthcity?harness_bridge=1&chrome=0"
+          target="_blank"
+          rel="noopener"
+          >独立窗口查看原生世界</a
+        >
+      </div>
+    </section>
     <main id="demo-console" class="demo-grid">
       <div class="demo-left">
         <section class="panel demo-composer" aria-labelledby="demo-title">
@@ -181,7 +223,7 @@
         </section>
         <section class="panel demo-camera" aria-labelledby="demo-camera-title">
           <div class="section-head">
-            <h2 id="demo-camera-title">无人机视图</h2>
+            <h2 id="demo-camera-title">云台画面与姿态</h2>
             <span id="brain-camera-source" class="helper">等待相机观测</span>
           </div>
           <div class="demo-camera-frame">

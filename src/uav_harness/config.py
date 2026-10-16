@@ -6,6 +6,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 from .contracts import Contract, Id
 from .brain.settings import BrainConfig
+from .drone4d.settings import Drone4DConfig
 
 
 class LinkConfig(Contract):
@@ -61,6 +62,7 @@ class Settings(Contract):
     api_port: int = Field(default=8080, ge=1024, le=65535)
     state_dir: Path = Path("state")
     brain: BrainConfig = Field(default_factory=BrainConfig)
+    drone4d: Drone4DConfig = Field(default_factory=Drone4DConfig)
 
     @model_validator(mode="after")
     def identities(self):

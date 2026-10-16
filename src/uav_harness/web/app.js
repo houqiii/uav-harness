@@ -8,6 +8,8 @@ import {
 } from "./gimbal.js";
 import { initWorkspace, updateWorkspace, pollJob } from "./workspace.js";
 import { initBrainUI, updateBrainContext } from "./brain.js";
+import { initSandbox } from "./sandbox.js";
+let sandboxState = null;
 let snapshot = null,
   connected = false,
   selected = "",
@@ -16,6 +18,7 @@ let snapshot = null,
 initTelemetry();
 initWorkspace();
 initBrainUI();
+initSandbox();
 function selectedVehicle() {
   return snapshot?.vehicles.find((v) => v.vehicle_id === selected);
 }
@@ -29,15 +32,25 @@ function render() {
   updateBrainContext(snapshot, connected);
   const state = $("link-state");
   state.className = "state" + (connected && !offline ? "" : " muted");
+  const sandboxView =
+    !["#hardware", "#console"].includes(location.hash) && sandboxState?.enabled;
   const labels = {
     simulator: "模拟链路",
     hardware: "实机链路",
     mixed: "混合链路",
-    offline: "离线推演",
+    offline: sandboxState?.enabled ? "实机未连接" : "离线推演",
   };
   state.replaceChildren(
     element("i"),
-    document.createTextNode(connected ? labels[snapshot.mode] : "连接断开"),
+    document.createTextNode(
+      sandboxView
+        ? sandboxState.state === "ready"
+          ? "在线沙盒"
+          : "沙盒待连接"
+        : connected
+          ? labels[snapshot.mode]
+          : "连接断开",
+    ),
   );
   $("control-mode").textContent =
     connected && offline
@@ -148,3 +161,9 @@ window.addEventListener("unhandledrejection", (event) => {
   event.preventDefault();
 });
 poll();
+
+window.addEventListener("drone4d-state", (event) => {
+  sandboxState = event.detail;
+  render();
+});
+window.addEventListener("hashchange", render);

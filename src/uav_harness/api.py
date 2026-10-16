@@ -17,6 +17,8 @@ from .errors import HarnessError, Uncertain
 from .runtime import Harness
 from .brain.service import BrainService
 from .brain.contracts import MissionRequest
+from .drone4d.service import Drone4DService
+from .drone4d.routes import register_routes
 
 
 class Intent(Contract):
@@ -54,9 +56,11 @@ def create_app(settings, compiler=None, *, offline=False, planner=None):
             if not offline:
                 await harness.open()
             app.state.brain=BrainService(harness,offline,planner)
+            app.state.sandbox=Drone4DService(harness,planner,state_dir=settings.state_dir)
             try:
                 yield
             finally:
+                await app.state.sandbox.close()
                 await app.state.brain.close()
                 await harness.close()
 
@@ -68,8 +72,12 @@ def create_app(settings, compiler=None, *, offline=False, planner=None):
 
     @app.middleware("http")
     async def authenticate(request, call_next):
-        public = request.url.path == "/" or request.url.path.startswith("/assets/")
-        if token and not public and not hmac.compare_digest(request.headers.get("Authorization", ""), "Bearer "+token):
+        path = request.url.path
+        public = path == "/" or path.startswith(("/assets/", "/drone4d-assets/", "/brand/", "/models/", "/fonts/", "/world/", "/sandbox/"))
+        # The native client uses its own scoped sandbox bearer, validated by the
+        # proxy. Management and frame delivery always require the Harness token.
+        native_proxy = settings.drone4d.enabled and path.startswith(("/api/", "/worlds/"))
+        if token and not (public or native_proxy) and not hmac.compare_digest(request.headers.get("Authorization", ""), "Bearer "+token):
             return JSONResponse({"error": "authentication required"}, status_code=401)
         return await call_next(request)
 
@@ -232,6 +240,8 @@ def create_app(settings, compiler=None, *, offline=False, planner=None):
 
         return StreamingResponse(events(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    register_routes(app,settings)
 
     web = Path(__file__).with_name("web")
     app.mount("/assets", StaticFiles(directory=web), name="assets")

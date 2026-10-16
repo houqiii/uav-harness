@@ -122,3 +122,11 @@ HTTP 默认仅绑定本机；对外绑定时必须设置 `HARNESS_API_TOKEN`，�
 - 飞行高度/相对距离、有效定位和已知电量按配置检查；普通解除武装只在地面执行。
 
 详细设计：[架构与扩展](docs/architecture.md)、[验证边界](docs/verification.md)。原始运行日志、SQLite 和密钥留在本地，不随源码发布。
+
+### Drone4D 在线沙盒
+
+```bash
+bash scripts/mac-sandbox.sh --http-port 8768
+```
+
+首次构建需要 Node 22.12+（22 系列）；VLM 使用 `DASHSCOPE_API_KEY`。打开 `http://127.0.0.1:8768/#sandbox` 创建独立会话，使用原生云台 RGB 与物理遥测驱动同一个 Qwen VLM 闭环。`#hardware` 保留实机控制接口。配置、运行方式与当前边界见 [Drone4D 接入说明](docs/DRONE4D.md)，研究接口建议见 [反馈草案](docs/DRONE4D-FEEDBACK.md)。
