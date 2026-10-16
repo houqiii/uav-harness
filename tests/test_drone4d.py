@@ -590,3 +590,44 @@ async def test_optical_zoom_waits_for_actual_focal_length_and_known_spec():
     assert commands == [("zoom", {"sensor": "eo", "zoom_x": 3})]
     p.latest_sensors["sensors"][0]["spec_ref"] = "unknown"
     assert not p.zoom_available()
+
+
+def test_sdk_initial_request_does_not_inherit_broken_shell_proxy(tmp_path, monkeypatch):
+    from uav_harness.drone4d.client import DroneClient
+    from uav_harness.drone4d.settings import Drone4DConfig
+    import httpx
+    sdk = tmp_path / 'tools/sdk'
+    sdk.mkdir(parents=True)
+    (sdk / 'awr_sandbox.py').write_text('''
+__version__ = 'test'
+class _Http:
+    def get(self, path):
+        return self.client.get(path).json()
+    def request(self, *args, **kwargs):
+        return self.client.request(*args, **kwargs)
+class Sandbox:
+    def __init__(self, base_url, **kwargs):
+        self.http = _Http(base_url, timeout_s=30, verify_tls=True)
+        self.initial = self.meta()
+    def meta(self):
+        return self.http.get('/api/sandbox/v1/meta')
+    def close(self):
+        self.http.client.close()
+''')
+    monkeypatch.setenv('HTTPS_PROXY', 'http://127.0.0.1:10808')
+    original = httpx.Client
+    calls = []
+    def client(**kwargs):
+        calls.append(kwargs)
+        assert kwargs['trust_env'] is False
+        assert kwargs['verify'] is True
+        return original(**kwargs, transport=httpx.MockTransport(
+            lambda req: httpx.Response(200, json={'api_version': 1})))
+    monkeypatch.setattr(httpx, 'Client', client)
+    c = DroneClient(Drone4DConfig(source_dir=tmp_path), tmp_path / 'state')
+    try:
+        assert c._connect()['api_version'] == 1
+        assert c.sandbox.initial['api_version'] == 1
+        assert len(calls) == 1
+    finally:
+        c.sandbox.close()

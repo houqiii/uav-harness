@@ -49,7 +49,26 @@ class DroneClient:
         spec = importlib.util.spec_from_file_location("uav_drone4d_sdk", path)
         self.sdk = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.sdk)
-        self.sandbox = self.sdk.Sandbox(
+        # Sandbox.__init__ calls meta(), so configure transport BEFORE construction.
+        # Replacing its client afterwards leaves the first request using shell proxies.
+        sdk = self.sdk
+
+        class DirectHttp(sdk._Http):
+            def __init__(self, base_url, *, timeout_s, verify_tls):
+                self.base = base_url.rstrip("/")
+                self.client = httpx.Client(
+                    base_url=self.base,
+                    timeout=timeout_s,
+                    verify=verify_tls,
+                    trust_env=False,
+                    headers={
+                        "accept": "application/json",
+                        "user-agent": f"awr-sandbox-sdk/{sdk.__version__}",
+                    },
+                )
+
+        sdk._Http = DirectHttp
+        self.sandbox = sdk.Sandbox(
             self.config.base_url,
             timeout_s=30,
             auto_keepalive=False,
@@ -57,19 +76,6 @@ class DroneClient:
                 str(self.state_file.resolve()).encode()
             ).hexdigest()[:32],
         )
-        # Public admission binds proof-of-work to the source address. The SDK's
-        # default environment proxy can rotate egress between challenge and reply.
-        previous = self.sandbox.http.client
-        self.sandbox.http.client = httpx.Client(
-            base_url=self.config.base_url,
-            timeout=30,
-            trust_env=False,
-            headers={
-                "accept": "application/json",
-                "user-agent": f"awr-sandbox-sdk/{self.sdk.__version__}",
-            },
-        )
-        previous.close()
         upstream_request = self.sandbox.http.request
 
         def request(method, path, **kwargs):
