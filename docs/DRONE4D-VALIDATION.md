@@ -438,3 +438,19 @@ state/acceptance/direct-heading-diagnostic.json. The new route is physically
 verified for this short step. A complete autonomous ≤50m+hover mission has
 NOT yet passed. Full suite146passed before this final route correction;
 focused suites are rerun after it.
+
+
+After the direct-route correction, original Qwen3-VL-Plus native run
+`bbdc0adcb9904e5bb2cd2aef1c88f52d` searched, reacquired the candidate after a
+mount-range adjustment, chose zoom/aim/inspect actions, and repeatedly advanced
+15m. Measured body heading stayed270 degrees while camera stayed near284 degrees
+across translation. Slant range progressed165→123→96→84→72.46m.
+The candidate was not abandoned; however, several extra zoom/aim rounds remain.
+At round39, after a completed inspection move, a missing sensor payload raised
+KeyError during observation. The task stopped and hovered; no ≤50m success claim.
+The public session was still ACTIVE with1152s remaining and a subsequent sensor
+read had payload+gimbal, so session expiration was not established as the cause.
+Refresh now validates the measured gimbal response and refetches one incomplete
+read before raising an explicit Uncertain error; absent data is never filled
+with a guessed or stale pose. This refetch makes no model request or flight
+command. Tests cover recovery and persistent incomplete responses.

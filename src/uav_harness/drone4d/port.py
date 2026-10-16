@@ -96,10 +96,24 @@ class Drone4DPort:
         self.latest = await c.call(c.session.vehicles.state, self.vehicle_id)
         self.latest_at = time.monotonic()
         if time.monotonic() - self.sensors_at > 1:
-            self.latest_sensors = await c.call(
-                c.session.vehicles.sensors, self.vehicle_id
-            )
-            self.sensors_at = time.monotonic()
+            for attempt in range(2):
+                sensors = await c.call(c.session.vehicles.sensors, self.vehicle_id)
+                payload = sensors.get("payload") if isinstance(sensors, dict) else None
+                gimbal = payload.get("gimbal") if isinstance(payload, dict) else None
+                if isinstance(gimbal, dict) and all(
+                    isinstance(gimbal.get(k), (int, float))
+                    and math.isfinite(gimbal[k])
+                    for k in ("yaw_rad", "pitch_rad")
+                ):
+                    self.latest_sensors = sensors
+                    self.sensors_at = time.monotonic()
+                    break
+                if attempt == 0:
+                    await asyncio.sleep(0.2)
+            else:
+                self.latest_sensors = None
+                self.sensors_at = 0
+                raise Uncertain("Drone4D sensor response missing measured gimbal payload")
         return self.telemetry()
 
     def pose_signature(self):

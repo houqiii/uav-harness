@@ -714,3 +714,38 @@ async def test_native_gimbal_limits_are_exposed_and_reject_before_sdk_dispatch()
         await p.execute({"action": "gimbal", "pitch_deg": -15, "yaw_deg": 270})
     p.latest_sensors["sensors"] = []
     assert p.gimbal_control() is None
+
+
+@pytest.mark.parametrize('recovers', [True, False])
+async def test_partial_sensor_response_is_refetched_without_promoting_stale_pose(recovers):
+    from types import SimpleNamespace
+    from uav_harness.drone4d.port import Drone4DPort
+    from uav_harness.errors import Uncertain
+
+    calls = 0
+    good = {'payload': {'gimbal': {'yaw_rad': 0.0, 'pitch_rad': -0.2}}}
+
+    async def state(vid):
+        return wire_state()
+
+    async def sensors(vid):
+        nonlocal calls
+        calls += 1
+        return good if recovers and calls == 2 else {'sensors': []}
+
+    async def call(fn, *args):
+        return await fn(*args)
+
+    client = SimpleNamespace(call=call, session=SimpleNamespace(
+        vehicles=SimpleNamespace(state=state, sensors=sensors)))
+    p = Drone4DPort(SimpleNamespace(client=client), 'v')
+    if recovers:
+        await p.refresh()
+        assert p.latest_sensors == good
+        assert p.sensors_at > 0
+    else:
+        with pytest.raises(Uncertain, match='missing measured gimbal payload'):
+            await p.refresh()
+        assert p.latest_sensors is None
+        assert p.sensors_at == 0
+    assert calls == 2
