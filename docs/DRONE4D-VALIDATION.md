@@ -242,3 +242,45 @@ are not a completed end-to-end native mission. Existing repository-wide lint
 style findings (imports/modernization, etc.) remain outside this fix.
 - Saved empty round 2 under the final prompt: target=null and yaw(120),
   preserving position rather than inventing candidate-directed translation.
+
+### 2026-10-16: stop repeating completed centring before magnification
+
+Retrieved the user's cancelled 16-round run (5cc2298ea70a4de2bff67fafdad15108)
+and stored its native frames locally for isolated replay. Rounds 9–15 all
+selected aim_target, all measured gimbal operations succeeded, and zoom
+remained 1.0 throughout. After initial pointing, the VLM repeatedly treated
+small, changing bbox offsets as reasons to restart “centre then zoom”. No
+camera command failure caused this loop. Existing context included the
+nested SDK UNVERIFIED acceptance receipt alongside measured completion,
+and did not quantify how much zoom was possible without exact centring.
+
+Added a calibrated zoom envelope using the current proposal's bbox and camera
+principal point, retaining a 10% image margin. Successful native gimbal results
+now explicitly report sensor-confirmed pointing and unchanged resolution.
+Planner history uses measured results rather than nested transport receipts,
+and reports when the preceding aim already completed.
+
+A proposal check returns feedback to the same VLM on the same image if it
+proposes another centring action after successful pointing when magnification
+is already possible. An oversized zoom receives its computed maximum. A
+magnified, still-visible candidate can receive a bounded-inspection suggestion
+only when the existing inspection geometry permits it. First pointing, edge
+candidates, aircraft displacement, missing current detections and disabled
+inspection retain their distinct behavior. No candidate, tool, flight direction
+or successful action is inserted by the checker. The VLM must issue a revised
+Decision. At most two corrections are allowed within the original 90-second
+budget, after which no action is dispatched. Existing freshness, range and
+completion checks still apply.
+
+Real Qwen calls on stored images, without native flight dispatch:
+- This run's round 10 selected zoom 1.5 after one same-frame correction for an
+  oversized zoom, instead of executing another aim_target.
+- This run's round 15 selected zoom 2.0 directly, no correction required.
+- Previously saved magnified round 14 selected inspect_target(10), with feet
+  unresolved; the controller produced NED [2.361,-9.717,0], a horizontal step.
+These are isolated action-selection results, not an end-to-end mission claim.
+
+Regression: 141 tests passed. Added coverage for same-frame VLM correction,
+centred-but-not-perfect boxes, edge clipping, real displacement, absent current
+detections, disabled inspection, missing ground information, bounded correction
+attempts and zoom-envelope limits. git diff --check passed.

@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 import httpx
 from pydantic import ValidationError
 from .contracts import Decision
+from .geometry import zoom_envelope, inspection_offset
 from ..model_stream import read_content
 from ..errors import HarnessError
 
@@ -79,6 +80,8 @@ observation_id 必须匹配当前帧。accepted_task_goal 是用户的最终任�
 - search_move：仅 policy.allow_search_reposition=true 且能力存在时可用于区域探索；默认禁止无目标平移。
 - 高度调整用于有证据的观测位置规划，不能替代尚未完成的候选放大检查；下降必须有已知地面净空。
 - 新帧已自动采集，不需要为了“再确认一次”反复 observe。动作失败/被拒绝不等于执行成功，应依据具体原因修正。
+- 上一轮对准成功后，优先放大而非再对准。proposal_feedback 会给出按你本帧 bbox 计算的可用倍率或接近条件；
+  目标未精确居中但放大不会裁出画面时，无需再居中。以反馈修正 next_action，不要重复原命令或编造已执行结果。
 
 验收与边界（用于运动边界或最终报告，不要当作疑似目标复查的前置清单）：
 - stand_off_m 为最小水平间隔；monitor_radius_m 为用户观测距离。distance_metric=slant 表示三维直线距离，需考虑高度。
@@ -104,7 +107,14 @@ def planning_memory(obs, history, target):
     actions = [
         {
             "action": item.get("decision", {}).get("next_action"),
-            "result": item.get("result"),
+            # SDK acceptance says UNVERIFIED, but the adapter subsequently waits
+            # for measured completion. Expose the measured result, not that stale
+            # nested transport acknowledgement as competing action evidence.
+            "result": {
+                k: v for k, v in item.get("result", {}).items() if k != "receipt"
+            }
+            if isinstance(item.get("result"), dict)
+            else item.get("result"),
         }
         for item in history[-8:]
     ]
@@ -177,7 +187,19 @@ def active_perception_feedback(obs, policy, history):
         if action in ("aim_target", "gimbal", "zoom", "observe"):
             camera_only += 1
     enabled = policy.allow_candidate_inspection and "inspect_target" in obs.capabilities
+    last = next((h for h in reversed(history) if h.get("decision")), {})
+    last_action = last.get("decision", {}).get("next_action", {}).get("action")
+    aim_completed = (
+        last_action in ("aim_target", "gimbal")
+        and last.get("result", {}).get("status") == "succeeded"
+    )
     return {
+        "previous_aim_completed": aim_completed,
+        "after_successful_aim": (
+            "已完成对准，不要为几像素到几十像素的偏差重做居中；候选仍在画面中则优先 zoom，已放大则检查是否可 inspect_target。"
+            if aim_completed
+            else None
+        ),
         "inspection_enabled": enabled,
         "search_position_locked": not policy.allow_search_reposition,
         "magnified_view_available": bool(
@@ -193,6 +215,75 @@ def active_perception_feedback(obs, policy, history):
         ),
         "range_completion_still_requires_grounded_evidence": True,
     }
+
+
+def visual_proposal_feedback(obs, policy, history, decision):
+    """Critique only a proposed, unexecuted redundant camera action.
+
+    Never substitute a flight action or invent a detection. The same VLM must
+    select a revised tool on the same image. Edges, lost targets and disabled
+    capabilities remain explicit exceptions.
+    """
+    action = decision.next_action.action
+    if action not in ("aim_target", "gimbal", "zoom", "observe"):
+        return None
+    detection = decision.target
+    if not detection:
+        return None
+    max_zoom = zoom_envelope(obs.camera, detection.bbox)
+    if max_zoom is None or "zoom" not in obs.capabilities:
+        return None
+    feedback = {
+        "status": "not_dispatched",
+        "observation_id": obs.observation_id,
+        "candidate_source": "your_current_frame_detection_not_confirmed_identity",
+        "max_zoom_x_with_10_percent_frame_margin": round(max_zoom, 2),
+        "current_zoom_x": obs.camera.zoom_x,
+        "rejected_proposal": decision.model_dump(),
+    }
+    if action == "zoom" and decision.next_action.zoom_x > max_zoom:
+        return {
+            **feedback,
+            "reason": "你选择的放大倍率会把当前候选裁出画面或挤到边缘。",
+            "revision": "选择不超过 max_zoom_x_with_10_percent_frame_margin 的放大倍率；若没有足够的放大空间，先 aim_target 一次。",
+        }
+    # A bounded inspection is informative even when identity/feet are unresolved.
+    # Do not urge motion unless the same controller geometry can actually bound it.
+    if (
+        decision.task_goal == "approach"
+        and policy.allow_candidate_inspection
+        and "inspect_target" in obs.capabilities
+        and obs.camera.zoom_x >= 1.5
+        and max_zoom >= obs.camera.zoom_x
+    ):
+        try:
+            inspection_offset(obs, detection, policy, policy.inspection_step_m)
+        except HarnessError:
+            pass
+        else:
+            return {
+                **feedback,
+                "reason": "当前候选已经放大且保留在画面内，有界水平复查可执行；重复居中/继续放大并不能补足身份或接地距离证据。",
+                "revision": "依据当前候选选择 inspect_target 的短步长，再由新帧判断；也可以根据图像明确排除候选。不要编造身份、距离或执行结果。",
+            }
+    last = next((h for h in reversed(history) if h.get("decision")), {})
+    previous = last.get("decision", {}).get("next_action", {}).get("action")
+    result = last.get("result", {})
+    prior_position = result.get("telemetry", {}).get("position_ned")
+    if (
+        action in ("aim_target", "gimbal")
+        and previous in ("aim_target", "gimbal")
+        and result.get("status") == "succeeded"
+        and prior_position is not None
+        and math.dist(prior_position, obs.telemetry.position_ned) < 0.8
+        and max_zoom >= max(1.5, obs.camera.zoom_x * 1.5)
+    ):
+        return {
+            **feedback,
+            "reason": "上次对准已成功，当前候选即使没有精确居中，仍可在上述倍率内放大且保留边缘余量；再次对准没有必要。",
+            "revision": "根据当前图像选择可用的 zoom_x；目标不必精确居中，也不必先确认身份或看清脚部。",
+        }
+    return None
 
 
 def response_schema():
@@ -257,6 +348,34 @@ class QwenPlanner:
         self.slots = asyncio.Semaphore(3)
 
     async def decide(self, query, obs, policy, history, target, on_progress):
+        feedback = None
+        try:
+            async with asyncio.timeout(90):
+                for attempt in range(3):
+                    decision = await self._decide_once(
+                        query, obs, policy, history, target, on_progress, feedback
+                    )
+                    feedback = visual_proposal_feedback(obs, policy, history, decision)
+                    if feedback is None:
+                        return decision
+                    on_progress(
+                        {
+                            "phase": "correcting_proposal",
+                            "attempt": attempt + 1,
+                            "message": feedback["reason"],
+                        }
+                    )
+        except TimeoutError:
+            raise RetryablePlannerError(
+                "Qwen VLM proposal deadline exceeded; no action dispatched"
+            ) from None
+        raise HarnessError(
+            "VLM 连续提出无进展的相机动作，已停止派发；未自动替换为飞行动作"
+        )
+
+    async def _decide_once(
+        self, query, obs, policy, history, target, on_progress, feedback=None
+    ):
         settings = provider_settings()
         if not settings["configured"]:
             raise HarnessError("DASHSCOPE_API_KEY is not configured")
@@ -271,6 +390,7 @@ class QwenPlanner:
                 obs, policy, history
             ),
             "schema": response_schema(),
+            "proposal_feedback": feedback,
         }
         body = {
             "model": settings["model"],

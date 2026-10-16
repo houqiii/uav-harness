@@ -428,12 +428,21 @@ class Drone4DPort:
                 raise HarnessError("unsupported Drone4D tool")
             if action not in ("gimbal", "zoom", "hold"):
                 await self.hold()
-            return {
+            result = {
                 "status": "succeeded",
                 "receipt": receipt,
                 "telemetry": (await self.refresh()).model_dump(),
                 "completion_scope": "drone4d_observed_flight_state",
             }
+            if action == "gimbal":
+                result["camera_effect"] = {
+                    "pointing_confirmed_by_sensors": True,
+                    "resolution_changed": False,
+                    "requested_pitch_deg": pitch_command,
+                    "requested_relative_yaw_deg": relative,
+                    "next_observation_is_after_this_adjustment": True,
+                }
+            return result
         except asyncio.CancelledError:
             await settle_cleanup(self.hold())
             raise
