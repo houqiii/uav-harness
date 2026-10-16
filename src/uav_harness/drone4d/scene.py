@@ -8,14 +8,15 @@ def search_scene(source_dir, seed=17):
     root = json.loads(
         (source_dir / "scenarios/sandbox/synthcity/t6_manual.json").read_text()
     )
-    # Independently selected placement, outside the initial east-facing view.
+    # West-side open road, outside the initial east-facing view.
+    # Drone4D synthcity DSM 9e05c2364f58: segment_los from launch
+    # (-31.9, -337.1, 50) to both feet (+0.1 m) and head (+1.7 m)
+    # is clear for every candidate. North-side candidates were occluded.
     # Coordinates remain scene inputs and are never sent to the VLM.
     roads = [
         [-180.0, -300.0, None],
-        [0.0, -190.0, None],
         [-175.0, -300.0, None],
         [-185.0, -300.0, None],
-        [-10.0, -190.0, None],
     ]
     spawn = random.Random(seed).choice(roads)
     return {

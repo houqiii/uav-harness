@@ -115,6 +115,8 @@ def test_seed_changes_scene_but_never_inserts_a_preplanned_route(tmp_path):
     for seed in range(10, 25):
         scene = search_scene(tmp_path, seed)
         point = scene["targets"][0]["pos"]
+        # Only native-DSM visibility-checked open-road positions may be used.
+        assert point[:2] in [[-180.0, -300.0], [-175.0, -300.0], [-185.0, -300.0]]
         assert 140 <= math.dist(point[:2], [-31.9, -337.1]) <= 165
         # Initial yaw is east (90 degrees); keep every seed well outside that view.
         bearing = math.degrees(math.atan2(point[0] + 31.9, point[1] + 337.1)) % 360

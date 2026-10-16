@@ -40,3 +40,25 @@
 按用户要求，默认人物改为距起点约 200 m（种子 17 实测 205.28 m），独立评测起点范围同步为 180–230 m；最终仍按三维距离 ≤50 m 验收。没有修改模型识别策略或加入目标特异规则。五处候选位置在线查询 DTM 为 0 m，DSM 不超过 0.01 m。
 
 原生前端构建通过，相关 Python 测试 44 项通过。Chrome 桌面 1440 宽页面验证了同屏 FPV、第三人称跟随、真实 Qwen 观测摘要和计划；历史轮次可展开，包含帧编号与动作。原生第三人称不领取采集请求，不向模型供图。实测起飞 50 m、转向、暂停悬停及切页恢复；页面无横向溢出，浏览器无应用错误。小屏自动换行，未实测移动端。此轮是布局与接口验证，未宣称完整目标接近任务成功。
+
+### 2026-10-16: unobstructed 150 m search placement
+
+The north-side candidate `[-10, -190]` was present in the scene but occluded.
+The native `segment_los` query from launch ENU `[-31.9, -337.1, 50]` to
+`[-10, -190, 1.7]` returned `visible=false`, with the first obstruction near
+`[-13.28, -212, 8.92]`. This was a scenario visibility failure, not evidence
+of a missing person mesh or a VLM recognition failure.
+
+Retained only west-side positions `[-180, -300]`, `[-175, -300]`, and
+`[-185, -300]`. Native `ground_dtm` returned 0 m at all three positions;
+`height_dsm` returned approximately 0.01, 0, and 0 m. With `eps_m=0.1`,
+`segment_los` returned true for all six rays from the launch position at
+50 m altitude to each candidate's feet (+0.1 m) and head (+1.7 m).
+World content version: `9e05c2364f58`; derive hash: `d98119e8`.
+
+These are scene-authoring checks only. Target coordinates and visibility
+oracle results are not supplied to the planner. Person dimensions, initial
+camera direction, model prompts, and autonomous action selection are unchanged.
+This verifies native DSM line of sight; it does not establish VLM recognition
+success or a completed online mission. Restart the backend and create/reset
+the sandbox to apply the new placements to an existing session.
