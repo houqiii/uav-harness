@@ -86,6 +86,7 @@ class SimulatedPort:
                 "takeoff",
                 "yaw",
                 "gimbal",
+                "aim_target",
                 "approach",
                 "search_move",
                 "altitude",

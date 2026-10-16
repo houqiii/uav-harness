@@ -30,6 +30,7 @@ const actions = {
   takeoff: "起飞",
   yaw: "调整航向",
   gimbal: "调整云台",
+  aim_target: "对准候选目标",
   zoom: "光学变焦",
   approach: "接近目标",
   altitude: "调整高度",

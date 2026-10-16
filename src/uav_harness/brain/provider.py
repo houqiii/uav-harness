@@ -82,10 +82,13 @@ Not identifying a person yet is DIFFERENT from having no candidate. A small loca
 appearance (for example a red/orange patch when searching for red headwear) is enough to trigger inspection.
 Do not dismiss such a patch as noise, a marker, or too small without at least one magnified inspection of it.
 Record the tentative bbox and inspect; magnification may then reject it as a non-match. Do not claim identity from color alone.
-Candidate inspection has priority over search coverage: when a small plausible candidate appears, choose optical zoom
-as the next_action whenever a modest zoom increase will keep it inside the frame. Keep the current pitch while magnifying.
+Candidate inspection has priority over search coverage. When aim_target is available and a candidate is off-centre,
+record its current bbox and choose aim_target FIRST. This calibrated tool centres the current candidate (or reacquires the
+last recorded direction when target=null). It compensates for aircraft attitude; do not guess fixed angle increments.
+After the new centred frame, choose zoom based on its size and camera.zoom_x. Keep the pitch while magnifying.
+If a candidate disappears after zoom or aiming, use aim_target and, if needed, reduce zoom before resuming any wide scan.
 Do not tilt downward to "get closer", "see feet", or "improve resolution": that moves the target out of view.
-If increasing zoom would clip the candidate, use ONE small centring correction, then zoom on the next fresh image.
+If increasing zoom would clip the candidate, call aim_target, then zoom on the next fresh image.
 Do not chain pitch changes while describing the same unresolved small candidate. Once enough identity and grounded evidence
 is available, choose approach toward the goal instead of further zoom/scan/confirmation rituals.
 Choose the next action from this frame and actual feedback, not from a previously written scan checklist.
@@ -96,9 +99,10 @@ When search_camera_defaults is available, restore its pitch and zoom after an un
 Do not scan the whole field at a high zoom: its narrow FOV leaves gaps. Finish not_found only after valid wide-view coverage.
 More-negative camera pitch looks closer to the ground under the aircraft; moving pitch toward zero looks farther toward the horizon.
 If a target moves toward the bottom edge during approach, tilt further downward and reobserve before another translation.
-For a too-small candidate, magnify first if it fits. To check cropping after a zoom ratio r, use
+For a too-small candidate, centre it with aim_target when available, then magnify if it fits. To check cropping after a zoom ratio r, use
 new_x=cx+r*(x-cx), new_y=cy+r*(y-cy) for all bbox edges; choose a modest ratio that preserves a margin.
-Only centre first when required to prevent cropping. Reduce zoom if already clipped.
+Reduce zoom if already clipped; do not repeatedly magnify an off-centre candidate.
+gimbal pitch_deg is a body-relative actuator angle; historical direction hints are WORLD-relative. Use aim_target to apply those hints, never copy world pitch directly into gimbal.
 Camera pitch changes aim, NOT magnification. If a candidate is above centre, make pitch less negative;
 if below centre, make it more negative. Use small corrections accounting for the current zoom/FOV.
 Once centred but too small, choose zoom as the actual next_action, not another downward tilt.
@@ -211,7 +215,8 @@ def response_schema():
     schema = Decision.model_json_schema()
     detection = schema["$defs"]["Detection"]
     detection["properties"]["bbox_coordinate_space"] = {
-        "type": "string", "enum": ["pixels", "normalized_1000"],
+        "type": "string",
+        "enum": ["pixels", "normalized_1000"],
         "description": "Explicit units of bbox in the current original image",
     }
     detection["required"].append("bbox_coordinate_space")
@@ -229,16 +234,36 @@ def parse_decision(raw, obs):
         target = data["target"]
         units = target.pop("bbox_coordinate_space", "normalized_1000")
         if units not in ("pixels", "normalized_1000"):
-            raise InvalidDecision("target.bbox_coordinate_space must be pixels or normalized_1000; no action dispatched")
+            raise InvalidDecision(
+                "target.bbox_coordinate_space must be pixels or normalized_1000; no action dispatched"
+            )
         if units == "pixels":
             box = target.get("bbox")
-            if not isinstance(box, list) or len(box) != 4 or any(
-                isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in box
+            if (
+                not isinstance(box, list)
+                or len(box) != 4
+                or any(
+                    isinstance(v, bool)
+                    or not isinstance(v, (int, float))
+                    or not math.isfinite(v)
+                    for v in box
+                )
             ):
-                raise InvalidDecision("target.bbox must contain four finite pixel coordinates; no action dispatched")
-            target["bbox"] = [v * 1000 / size for v, size in zip(
-                box, (obs.camera.width, obs.camera.height, obs.camera.width, obs.camera.height)
-            )]
+                raise InvalidDecision(
+                    "target.bbox must contain four finite pixel coordinates; no action dispatched"
+                )
+            target["bbox"] = [
+                v * 1000 / size
+                for v, size in zip(
+                    box,
+                    (
+                        obs.camera.width,
+                        obs.camera.height,
+                        obs.camera.width,
+                        obs.camera.height,
+                    ),
+                )
+            ]
     return Decision.model_validate(data)
 
 

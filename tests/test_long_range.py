@@ -242,3 +242,74 @@ async def test_candidate_association_survives_pose_jitter_but_requires_grounding
     current, decision = frame(6, 95, -21.75, samples[-1][2])
     m.remember_target(current, decision)
     assert m.target["confirmed_observations"] == 1
+
+
+async def test_aim_centres_current_ray_and_rejects_zoom_that_crops_candidate():
+    from uav_harness.brain.contracts import Detection
+    from uav_harness.brain.geometry import project, candidate_ray
+
+    port = SimulatedPort("v", seed=1)
+    port.position = [0, 0, -50]
+    obs = await port.observe()
+    obs.camera = obs.camera.model_copy(
+        update={
+            "width": 1280,
+            "height": 720,
+            "cx": 640,
+            "cy": 360,
+            "fx": 2203.61,
+            "fy": 2203.61,
+            "zoom_x": 2,
+            "yaw_deg": 270.09,
+            "pitch_deg": -18.78,
+            "roll_deg": -0.33,
+        }
+    )
+    obs.capabilities += ["zoom", "aim_target"]
+    m = Mission(MissionRequest(query="接近", vehicle_id="v"), port, None, Policy())
+    d = proposal(obs, {"action": "aim_target"})
+    d.target = Detection(
+        label="疑似人员",
+        bbox=[890.625, 722.2222, 902.34375, 750],
+        ground_contact_visible=False,
+    )
+    m.remember_target(obs, d)
+    with pytest.raises(HarnessError, match="zoom would crop"):
+        m.ground_command(obs, proposal(obs, {"action": "zoom", "zoom_x": 3}))
+    command = m.ground_command(obs, d)
+    assert command["world_reference"]
+    ray = candidate_ray(obs, d.target)
+    aimed = obs.camera.model_copy(
+        update={"yaw_deg": command["yaw_deg"], "pitch_deg": command["pitch_deg"]}
+    )
+    pixel = project(aimed, (0, 0, 0), ray)
+    assert pixel[:2] == pytest.approx((640, 360))
+    m.remember_target(
+        obs.model_copy(update={"observation_id": "lost"}),
+        proposal(obs, {"action": "observe"}),
+    )
+    assert m.ground_command(obs, d) == command
+
+
+def test_world_aim_compensates_for_body_attitude():
+    from uav_harness.drone4d.port import world_aim_to_gimbal
+
+    # Arbitrary normalized attitude; independent quaternion-vector rotation
+    # verifies native gimbal forward direction after world-from-body transform.
+    q = [0.04, -0.02, 0.7, 0.71]
+    q = [v / math.sqrt(sum(x * x for x in q)) for v in q]
+    az, el = world_aim_to_gimbal(q, 284.1, -22.5)
+    body = [math.cos(el) * math.cos(az), math.cos(el) * math.sin(az), math.sin(el)]
+
+    def cross(a, b):
+        return [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ]
+
+    uv = cross(q[:3], body)
+    uuv = cross(q[:3], uv)
+    actual = [body[i] + 2 * q[3] * uv[i] + 2 * uuv[i] for i in range(3)]
+    assert math.degrees(math.atan2(actual[0], actual[1])) % 360 == pytest.approx(284.1)
+    assert math.degrees(math.asin(actual[2])) == pytest.approx(-22.5)

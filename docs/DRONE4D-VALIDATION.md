@@ -109,3 +109,33 @@ patch must first be inspected, replay of round 8 selected zoom 2x and recorded
 its tentative bbox. This tests candidate inspection decisions, not a completed
 closed-loop approach. The revised prompt does not guarantee all future model
 outputs; geometric approach guards remain in force.
+
+### 2026-10-16: calibrated candidate centring and zoom bounds
+
+Mission `3f93b4133ac34c4f8af979c1949a1dcb` demonstrated two independent
+control issues. At 2x zoom the recorded box was near the right edge
+(`[890.625,722.2222,902.34375,750]` normalized). Increasing to 3x put its
+projected right edge beyond the image. Subsequent gimbal commands copied
+world pitch -22.5 degrees directly into the native body-relative actuator;
+observed camera pitch was about -25.7 to -26.5 degrees rather than -22.5.
+
+Added model-selected `aim_target`: the runner uses the current recorded
+candidate's calibrated image ray (or a recent last bearing while stationary),
+then the Drone4D adapter transforms the world look vector through inverse
+body attitude into native FLU gimbal azimuth/elevation. This matches the
+P600 GX40 zero-rotation mount and Drone4D's Rz(azimuth) Ry(-elevation)
+convention. The planner chooses whether to aim, zoom or approach; no target
+truth or predetermined flight route is supplied. Raw gimbal actions retain
+their prior actuator semantics. Hardware does not advertise this new tool.
+
+Observations include measured optical zoom for the native GX40. A proposed
+zoom that would crop the currently detected box is rejected with specific
+centring feedback. Tests verify the recorded 2x-to-3x crop, calibrated ray
+projection to image centre, last-bearing reacquisition, and attitude
+compensation using an independent quaternion-vector rotation calculation.
+
+One isolated live Qwen replay of the saved round-10 image, with recorded
+prior action/result context and the new capability, selected `aim_target`
+and a tentative bbox instead of another zoom. No flight command was
+executed during replay. Full native camera-motion/approach success remains
+to be verified online; this record does not claim an end-to-end pass.

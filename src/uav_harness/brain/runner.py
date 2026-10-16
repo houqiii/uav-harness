@@ -267,6 +267,53 @@ class Mission:
             ):
                 raise HarnessError("exploration altitude outside mission bounds")
             return {"action": "move", "offset_ned": offset}
+        if a.action == "aim_target":
+            target = self.target
+            if not t.airborne or not target or not target.get("bearing_ray_ned"):
+                raise HarnessError(
+                    "aim_target requires a recorded image candidate and airborne vehicle"
+                )
+            origin = obs.camera.position_ned or t.position_ned
+            if (
+                math.dist(origin, target["capture_position_ned"]) > 0.5
+                or obs.captured_at - target["last_seen_at"] > 60
+            ):
+                raise HarnessError(
+                    "candidate bearing expired or vehicle translated; reobserve before aiming"
+                )
+            n, e, d = target["bearing_ray_ned"]
+            pitch = -math.degrees(math.atan2(d, math.hypot(n, e)))
+            if not -85 <= pitch <= -5:
+                raise HarnessError("candidate direction outside camera pitch bounds")
+            return {
+                "action": "gimbal",
+                "yaw_deg": math.degrees(math.atan2(e, n)) % 360,
+                "pitch_deg": pitch,
+                "world_reference": True,
+            }
+        if (
+            a.action == "zoom"
+            and obs.camera.zoom_x
+            and self.target
+            and self.target.get("visible")
+        ):
+            ratio = a.zoom_x / obs.camera.zoom_x
+            if ratio > 1:
+                c = obs.camera
+                left, top, right, bottom = self.target["bbox"]
+                edges = [
+                    c.cx + ratio * (x / 1000 * c.width - c.cx) for x in (left, right)
+                ]
+                edges += [
+                    c.cy + ratio * (y / 1000 * c.height - c.cy) for y in (top, bottom)
+                ]
+                if not (
+                    0 <= edges[0] < edges[1] <= c.width
+                    and 0 <= edges[2] < edges[3] <= c.height
+                ):
+                    raise HarnessError(
+                        "zoom would crop the current candidate; call aim_target to centre it before magnifying"
+                    )
         if a.action == "approach":
             if self.resolved_objective != "approach":
                 raise HarnessError(

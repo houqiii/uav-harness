@@ -57,6 +57,7 @@ class Telemetry(Contract):
 class Camera(Contract):
     width: int = Field(gt=0, le=4096)
     height: int = Field(gt=0, le=4096)
+    zoom_x: float | None = Field(default=None, ge=1, le=5)
     fx: float = Field(gt=0)
     fy: float = Field(gt=0)
     cx: float
@@ -128,6 +129,10 @@ class Gimbal(Contract):
     yaw_deg: float | None = Field(default=None, ge=0, lt=360)
 
 
+class AimTarget(Contract):
+    action: Literal["aim_target"]
+
+
 class Zoom(Contract):
     action: Literal["zoom"]
     zoom_x: float = Field(ge=1, le=5)
@@ -165,6 +170,7 @@ Tool = Annotated[
         Takeoff,
         Yaw,
         Gimbal,
+        AimTarget,
         Zoom,
         Approach,
         SearchMove,

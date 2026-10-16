@@ -16,6 +16,30 @@ def heading_from_enu(yaw):
     return (90 - math.degrees(yaw)) % 360
 
 
+def world_aim_to_gimbal(quaternion, heading_deg, pitch_deg):
+    """World NED look direction -> native FLU gimbal azimuth/elevation.
+
+    Matches Drone4D's world_from_body * Rz(azimuth) * Ry(-elevation),
+    including aircraft roll/pitch. Native EO mount axes coincide with body FLU.
+    """
+    x, y, z, w = quaternion
+    norm = math.sqrt(sum(v * v for v in quaternion))
+    if norm < 1e-8:
+        raise HarnessError("invalid aircraft attitude for camera aiming")
+    x, y, z, w = (v / norm for v in (x, y, z, w))
+    h, p = math.radians(heading_deg), math.radians(pitch_deg)
+    world = (math.cos(p) * math.sin(h), math.cos(p) * math.cos(h), math.sin(p))
+    rotation = (
+        (1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)),
+        (2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)),
+        (2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)),
+    )
+    body = [sum(rotation[j][i] * world[j] for j in range(3)) for i in range(3)]
+    return math.atan2(body[1], body[0]), math.atan2(
+        body[2], math.hypot(body[0], body[1])
+    )
+
+
 def telemetry_from_state(wire):
     s = wire["state"]
     p = s["pos_enu_m"]
@@ -143,6 +167,18 @@ class Drone4DPort:
                 "Drone4D aircraft moved during capture; acquire stationary frame"
             )
         self.last_camera = frame["camera"]
+        if self.zoom_available():
+            eo = next(
+                (
+                    s
+                    for s in self.latest_sensors["payload"].get("sensors", [])
+                    if s.get("sensor") == "eo"
+                ),
+                {},
+            )
+            zoom = (eo.get("f_mm") or 0) / 4.8
+            if 1 <= zoom <= 5:
+                self.last_camera = self.last_camera.model_copy(update={"zoom_x": zoom})
         self.capture_signature = self.pose_signature()
         return Observation(
             observation_id=uuid.uuid4().hex,
@@ -160,6 +196,7 @@ class Drone4DPort:
                 "takeoff",
                 "yaw",
                 "gimbal",
+                "aim_target",
                 "altitude",
                 "approach",
                 "search_move",
@@ -309,10 +346,23 @@ class Drone4DPort:
                     if cmd.get("yaw_deg") is None
                     else ((cmd["yaw_deg"] - t.heading_deg + 180) % 360 - 180)
                 )
+                pitch_command = cmd["pitch_deg"]
+                if cmd.get("world_reference"):
+                    azimuth, elevation = world_aim_to_gimbal(
+                        self.latest["state"]["q_xyzw"], cmd["yaw_deg"], cmd["pitch_deg"]
+                    )
+                    relative, pitch_command = (
+                        -math.degrees(azimuth),
+                        math.degrees(elevation),
+                    )
+                    if not -90 <= pitch_command <= 30 or abs(relative) > 150:
+                        raise HarnessError(
+                            "world camera aim outside native gimbal limits"
+                        )
                 receipt = await self.command(
                     "gimbal",
                     mode="angles",
-                    pitch_rad=math.radians(cmd["pitch_deg"]),
+                    pitch_rad=math.radians(pitch_command),
                     yaw_rad=-math.radians(relative),
                 )
                 await self.wait(
@@ -321,7 +371,7 @@ class Drone4DPort:
                             math.degrees(
                                 self.latest_sensors["payload"]["gimbal"]["pitch_rad"]
                             )
-                            - cmd["pitch_deg"]
+                            - pitch_command
                         )
                         < 2
                         and abs(
