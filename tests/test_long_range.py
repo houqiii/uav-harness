@@ -363,8 +363,8 @@ async def test_visible_magnified_candidate_can_move_without_feet_but_cannot_fini
         m.ground_command(obs, d)
     m.policy.allow_candidate_inspection = True
     obs.camera.zoom_x = 1
-    with pytest.raises(HarnessError, match="magnify"):
-        m.ground_command(obs, d)
+    # Optical magnification is the planner's choice, not a movement permission threshold.
+    assert m.ground_command(obs, d)["action"] == "move"
     obs.camera.zoom_x = 2
     d.target = None
     with pytest.raises(HarnessError, match="current-image"):
@@ -440,3 +440,67 @@ async def test_default_search_cannot_translate_even_if_model_requests_exploratio
             obs, proposal(obs, {"action": "inspect_target", "distance_m": 15})
         )
     assert active_perception_feedback(obs, m.policy, [])["search_position_locked"]
+
+
+async def test_candidate_motion_keeps_camera_world_bearing_through_native_enu_adapter():
+    from uav_harness.brain.contracts import Detection
+    from uav_harness.drone4d.port import Drone4DPort
+
+    # Aircraft faces east; its camera sees a candidate west-northwest. The
+    # translation must follow that visual ray, never the aircraft's forward axis.
+    sim = SimulatedPort("v", seed=1)
+    sim.position = [-337, -32, -50]
+    obs = await sim.observe()
+    obs.telemetry.heading_deg = 90
+    obs.telemetry.home_north_m = -337
+    obs.telemetry.home_east_m = -32
+    obs.camera = obs.camera.model_copy(
+        update={
+            "yaw_deg": 284,
+            "pitch_deg": -17,
+            "roll_deg": 0,
+            "zoom_x": 2,
+            "position_ned": obs.telemetry.position_ned,
+        }
+    )
+    obs.capabilities.append("inspect_target")
+    m = Mission(
+        MissionRequest(query="接近", vehicle_id="v"),
+        sim,
+        None,
+        Policy(allow_candidate_inspection=True),
+    )
+    m.resolved_objective = "approach"
+    d = proposal(obs, {"action": "inspect_target", "distance_m": 10})
+    d.target = Detection(label="candidate", bbox=[495, 495, 505, 505])
+    m.remember_target(obs, d)
+    command = m.ground_command(obs, d)
+    north, east, down = command["offset_ned"]
+    assert north == pytest.approx(2.41921896)
+    assert east == pytest.approx(-9.70295726)
+    assert down == 0
+
+    native = Drone4DPort(SimpleNamespace(config=SimpleNamespace(speed_mps=3)), "v")
+    sent = []
+
+    async def refresh():
+        return obs.telemetry.model_copy(deep=True)
+
+    async def send(name, **args):
+        sent.append((name, args))
+        return {"status": "accepted"}
+
+    async def wait(predicate, **kwargs):
+        t = obs.telemetry.model_copy(deep=True)
+        t.position_ned = (-337 + north, -32 + east, -50)
+        assert predicate(t)
+        return t
+
+    async def hold():
+        return None
+
+    native.refresh, native.command, native.wait, native.hold = refresh, send, wait, hold
+    await native.execute(command)
+    assert sent[0][0] == "goto"
+    assert sent[0][1]["pos"] == pytest.approx([-41.70295726, -334.58078104, 50])
+    assert "yaw_rad" not in sent[0][1]  # No unrelated yaw back to the search heading.

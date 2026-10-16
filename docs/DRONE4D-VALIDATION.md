@@ -284,3 +284,72 @@ Regression: 141 tests passed. Added coverage for same-frame VLM correction,
 centred-but-not-perfect boxes, edge clipping, real displacement, absent current
 detections, disabled inspection, missing ground information, bounded correction
 attempts and zoom-envelope limits. git diff --check passed.
+
+### 2026-10-16: remove strategy overrides and fix image-coordinate ambiguity
+
+This section supersedes the zoom-envelope/same-frame correction mechanism above.
+The user requested a clean harness whose planning does not depend on this scene.
+Removed the computed maximum-zoom suggestion, its 10% margin calculation, all
+same-image semantic reprompting, and the 1.5x inspection permission threshold.
+The VLM now returns one decision per observation; history feedback reports facts
+only. Device bounds, current-image provenance, physical range/fence checks and
+geometric crop validation remain. No target position, color-specific detector,
+or scenario-specific zoom/heading is inserted into runtime planning.
+
+The cancelled run `2f78d964402e44adb2ed52c3c57bfa73` exposed two distinct issues:
+
+- Round 8's native 1280x720 image shows the tiny target around (895,347), while
+  the old pixel-coordinate response put it around (895,487). This commanded
+  pitch -24.23 degrees and pointed too far down. Round 9 still had the target
+  near the upper part of the frame; the previous heuristic nevertheless favored
+  zoom. Additionally, the semantic-repair echo sent internally normalized boxes
+  without a coordinate tag, creating an ambiguous second-conversion path. Raw
+  original responses were not retained, so double conversion in that particular
+  response cannot be proved. The new model schema/prompt exclusively requests
+  normalized_1000; explicit legacy pixel responses are still parsed for replay.
+  There is no longer an ambiguous repair echo.
+- The mission's accepted objective was `find`, despite a user request to approach
+  and monitor within a distance. The task_goal schema now explicitly describes
+  the final user objective, separately from the current search phase. Decision
+  events record task_goal and task_interpretation for audit. A subsequent real
+  Qwen call classified the same instruction as `approach`.
+
+The original run issued no move/inspect_target/approach command. After zoom and
+loss of detection, it issued yaw(90), leaving its position essentially unchanged.
+Thus that run's observed wrong-direction turn was a search decision, not evidence
+of a NED/ENU translation-axis reversal.
+
+Validation used the existing native session; no new session or full mission was
+created. Source frames and diagnostic results are locally retained under ignored
+`state/debug-vlm/direction/`:
+
+- Normalized-coordinate replay of original frame 8 localized bbox
+  [695,465,705,475], producing world yaw 283.6535 / pitch -16.7599. Executing this
+  direction in the native adapter produced an actual camera yaw 283.5925 /
+  pitch -16.3595; the newly captured target was near the image center.
+- A diagnostic 2x zoom (operator/test-selected, NOT claimed as VLM-selected)
+  retained the target near the center. Independent model calls still sometimes
+  missed the 1x candidate or chose another aim on the 2x image. The harness does
+  not replace those model outputs to fabricate successful planning.
+- An adapter-only 5m inspection calibration used a current VLM bbox and generated
+  NED offset [1.2145,-4.8503,0], bearing 284.0575 degrees. Actual displacement
+  between diagnostic captures was [1.164,-4.854,0.003], horizontal 4.9916m,
+  bearing 283.4850 degrees. This was an explicitly selected calibration move,
+  not an autonomous VLM approach. It tests visual bearing through the native
+  motion adapter without using scene truth.
+- An independent regression uses a camera pointing west-northwest while the
+  aircraft points east, checking that the native ENU destination follows the
+  camera ray and does not add an unrelated body-yaw command. Resolution tests
+  verify normalized boxes are not rescaled twice at three image aspect ratios.
+
+Full suite: 143 passed. After adding objective descriptions and event audit
+fields, focused brain/geometry/planner tests: 43 passed. This is not a completed
+50m autonomous mission claim. The already running dashboard process still uses
+its previously loaded backend until restarted with scripts/mac-dashboard.sh.
+
+The final single-frame Qwen check on the native 2x image, including the actual
+preceding gimbal/zoom results, correctly used task_goal=approach and localized
+a candidate, but still selected aim_target. That output was not replaced with
+inspect_target and was not presented as autonomous flight success. Tool schema
+descriptions now distinguish pointing, optical zoom and horizontal inspection;
+there are no numerical scene-specific planning suggestions.

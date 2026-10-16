@@ -40,28 +40,6 @@ def candidate_ray(obs, detection):
     return [x / norm for x in ray]
 
 
-def zoom_envelope(camera, bbox):
-    """Maximum absolute optical zoom that keeps the measured box in frame.
-
-    This is image geometry, not target identity or range. Leave a 10% image
-    margin so bbox jitter does not require pixel-perfect centring.
-    """
-    if camera.zoom_x is None:
-        return None
-    limits = [5 / camera.zoom_x]
-    for edge, size, centre in zip(
-        bbox,
-        (camera.width, camera.height, camera.width, camera.height),
-        (camera.cx, camera.cy, camera.cx, camera.cy),
-    ):
-        displacement = edge / 1000 * size - centre
-        if displacement > 0:
-            limits.append((0.9 * size - centre) / displacement)
-        elif displacement < 0:
-            limits.append((centre - 0.1 * size) / -displacement)
-    return max(1, min(limits) * camera.zoom_x)
-
-
 def project(camera, position, point):
     forward, right, down = basis(camera)
     delta = [a - b for a, b in zip(point, position)]
@@ -143,8 +121,6 @@ def inspection_offset(obs, detection, policy, requested):
         raise HarnessError(
             "candidate inspection requires enabled sandbox policy and calibrated ground"
         )
-    if not c.zoom_x or c.zoom_x < 1.5:
-        raise HarnessError("magnify the visible candidate before inspection motion")
     ray = candidate_ray(obs, detection)
     horizontal = math.hypot(ray[0], ray[1])
     depression = math.atan2(ray[2], horizontal)

@@ -133,10 +133,22 @@ class Gimbal(Contract):
 
 
 class AimTarget(Contract):
+    """Point at the current image candidate using calibrated camera geometry.
+
+    Changes pointing, not detail/resolution. A candidate already near the image
+    center does not need repeated alignment before inspection.
+    """
+
     action: Literal["aim_target"]
 
 
 class Zoom(Contract):
+    """Choose absolute optical zoom within the camera's supported range.
+
+    Magnifies the current view without moving the aircraft. The planner chooses
+    the factor from current imagery; no scene-specific factor is supplied.
+    """
+
     action: Literal["zoom"]
     zoom_x: float = Field(ge=1, le=5)
 
@@ -147,6 +159,13 @@ class Approach(Contract):
 
 
 class InspectTarget(Contract):
+    """Fly a short horizontal step along the current candidate's visual bearing.
+
+    Active perception for a visible but uncertain candidate: use after camera
+    inspection when getting closer will resolve detail. Does not require prior
+    identity confirmation or visible feet. Subject to advertised range bounds.
+    """
+
     action: Literal["inspect_target"]
     distance_m: float = Field(gt=0, le=15)
 
@@ -193,7 +212,9 @@ Tool = Annotated[
 
 class Decision(Contract):
     observation_id: Id
-    task_goal: Literal["find", "approach"]
+    task_goal: Literal["find", "approach"] = Field(
+        description="Final user objective, not current phase: find means locate only; approach means locate then physically approach/observe within a requested distance, including while still searching."
+    )
     task_interpretation: str = Field(min_length=1, max_length=500)
     scene_summary: str = Field(min_length=1, max_length=700)
     plan: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(

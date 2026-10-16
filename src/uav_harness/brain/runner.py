@@ -548,6 +548,8 @@ class Mission:
             self.event(
                 "decision",
                 d.scene_summary,
+                task_goal=d.task_goal,
+                task_interpretation=d.task_interpretation,
                 action=d.next_action.model_dump(),
                 plan=d.plan,
                 round=self.round,
