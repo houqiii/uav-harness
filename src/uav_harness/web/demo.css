@@ -1134,3 +1134,245 @@
     flex-direction: column;
   }
 }
+
+/* One-screen flight workspace; model frames retain their original resolution. */
+#sandbox-workspace {
+  margin: 12px 24px;
+}
+.flight-triptych {
+  display: grid;
+  grid-template-columns: 1fr 1fr 0.95fr;
+  gap: 12px;
+  margin-top: 12px;
+  align-items: stretch;
+}
+.flight-triptych > * {
+  min-width: 0;
+}
+.flight-view {
+  padding: 12px;
+  overflow: hidden;
+}
+.flight-view h2,
+#flight-reasoning h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.flight-view .section-head {
+  margin-bottom: 10px;
+}
+.flight-view .section-head .helper {
+  font-size: 10px;
+}
+#sandbox-third-viewport {
+  position: relative;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: #0b1117;
+}
+#sandbox-third {
+  width: 1280px;
+  height: 720px;
+  border: 0;
+  transform-origin: top left;
+  transform: scale(var(--sandbox-render-scale, 1));
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#flight-fpv {
+  aspect-ratio: 16/9;
+  background: #0b1117;
+}
+#flight-fpv #sandbox-viewport {
+  max-width: none;
+}
+#flight-reasoning > .panel {
+  height: 100%;
+  max-height: calc(100dvh - 285px);
+  overflow: auto;
+  padding: 16px;
+  box-sizing: border-box;
+}
+#flight-reasoning .brain-evidence {
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+#flight-reasoning .brain-task-plan {
+  font-size: 12px;
+  line-height: 1.5;
+}
+#flight-reasoning .brain-tool {
+  margin-top: 8px;
+}
+#flight-reasoning code {
+  font-size: 11px;
+  max-height: 60px;
+  overflow: auto;
+  display: block;
+}
+#flight-reasoning #brain-task {
+  font-size: 11px;
+}
+.round-history {
+  margin-top: 12px;
+  max-height: 160px;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+}
+.round-history details {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.round-history summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.round-history p {
+  line-height: 1.6;
+}
+#flight-telemetry .panel,
+#flight-controls .panel {
+  border: 0;
+  padding: 14px 0 0;
+  background: none;
+  box-shadow: none;
+}
+#flight-telemetry .demo-metrics {
+  gap: 8px;
+  margin: 10px 0;
+}
+#flight-telemetry .demo-metrics strong {
+  font-size: 24px;
+}
+#flight-telemetry .demo-metrics span {
+  font-size: 10px;
+}
+#flight-controls .demo-options {
+  margin: 8px 0;
+}
+#flight-controls .demo-options label {
+  font-size: 11px;
+}
+#flight-controls .demo-options select {
+  padding: 6px;
+}
+#flight-controls .helper {
+  font-size: 11px;
+}
+.sandbox-focus .topbar {
+  min-height: 60px;
+  padding: 10px 24px;
+}
+.sandbox-focus .view-nav {
+  min-height: 42px;
+  padding-block: 0;
+}
+.sandbox-focus .sandbox-panel {
+  margin: 10px 24px 0;
+  padding: 10px 14px;
+}
+.sandbox-focus .sandbox-panel .section-head {
+  margin-bottom: 0;
+}
+.sandbox-focus .sandbox-panel h2 {
+  font-size: 14px;
+}
+.sandbox-focus .sandbox-panel .helper {
+  font-size: 11px;
+  margin: 4px 0;
+}
+.sandbox-focus .sandbox-panel .button {
+  padding: 8px 12px;
+  font-size: 12px;
+  min-height: 34px;
+}
+.sandbox-focus .sandbox-info {
+  padding-top: 4px;
+  font-size: 10px;
+}
+.sandbox-focus #sandbox-view-empty {
+  display: none;
+}
+.sandbox-focus #flight-intent .panel {
+  padding: 10px 14px;
+}
+.sandbox-focus #flight-intent .section-head,
+.sandbox-focus #flight-intent .demo-helper-row,
+.sandbox-focus #flight-intent .demo-plan-details {
+  display: none;
+}
+.sandbox-focus #flight-intent .demo-input-row {
+  margin: 0;
+}
+.sandbox-focus #flight-intent input,
+.sandbox-focus #flight-intent .button {
+  padding: 10px 12px;
+  min-height: 40px;
+  font-size: 13px;
+}
+.sandbox-focus #demo-console {
+  margin-top: 16px;
+}
+@media (max-width: 1050px) {
+  .flight-triptych {
+    grid-template-columns: 1fr 1fr;
+  }
+  #flight-reasoning {
+    grid-column: 1/-1;
+  }
+  #flight-reasoning > .panel {
+    max-height: 440px;
+  }
+}
+@media (max-width: 650px) {
+  #sandbox-workspace {
+    margin: 10px;
+  }
+  .flight-triptych {
+    grid-template-columns: 1fr;
+  }
+  .sandbox-focus .sandbox-panel {
+    margin: 10px;
+  }
+  .sandbox-focus #flight-intent .demo-input-row {
+    flex-wrap: wrap;
+  }
+}
+@media (min-width: 1051px) {
+  .sandbox-focus .topbar {
+    height: 52px;
+    min-height: 52px;
+    padding: 8px 24px;
+  }
+  .sandbox-focus .view-nav {
+    height: 36px;
+    min-height: 36px;
+  }
+  .sandbox-focus .view-tab {
+    padding-block: 8px;
+  }
+  .sandbox-focus .sandbox-panel > .section-head h2 {
+    display: none;
+  }
+  .sandbox-focus .sandbox-info {
+    display: none;
+  }
+  .sandbox-focus .sandbox-panel {
+    padding: 8px 14px;
+  }
+  .sandbox-focus #flight-intent .panel {
+    padding: 0;
+    border: 0;
+    background: none;
+  }
+  .sandbox-focus #flight-controls #brain-control-note,
+  .sandbox-focus #flight-controls #brain-provider {
+    display: none;
+  }
+  #flight-reasoning > .panel {
+    max-height: calc(100dvh - 235px);
+  }
+}

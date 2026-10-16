@@ -451,6 +451,8 @@ class Mission:
                 "decision",
                 d.scene_summary,
                 action=d.next_action.model_dump(),
+                plan=d.plan,
+                round=self.round,
                 observation_id=d.observation_id,
             )
             try:

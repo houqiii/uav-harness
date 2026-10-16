@@ -9,7 +9,7 @@ import {
   Vector3,
 } from "three";
 import { register, type FrameCtx } from "@/engine/loop";
-import { camera, sensorView, viewport } from "@/viewport/facade";
+import { camera, sensorView, viewport, layers } from "@/viewport/facade";
 import { vp } from "@/viewport/session";
 import { selection } from "@/stores/selection";
 import { resumeSandbox, STORAGE_KEY } from "@/stores/sandboxSession";
@@ -34,6 +34,8 @@ interface Config {
 const requests = new Map<string, CaptureRequest>();
 const figures = new Map<string, Group>();
 let config: Config;
+const observerOnly =
+  new URLSearchParams(location.search).get("harness_view") === "third";
 let busy = false;
 let exporting = false;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
@@ -127,6 +129,16 @@ async function poll() {
   if (busy) return;
   busy = true;
   try {
+    if (observerOnly) {
+      if (ready()) {
+        selection.select([config.vehicle_ids[0]]);
+        if (camera.mode !== "third") camera.setMode("third");
+        if (!camera.followLock) camera.setFollowLock(true);
+        layers.setVisible("frustums", false);
+        viewport.requestFrame();
+      }
+      return;
+    }
     const result = await api(
       `/v1/sandbox/render/requests?sid=${encodeURIComponent(config.sid)}`,
     );
@@ -157,7 +169,14 @@ async function poll() {
   }
 }
 async function exportFrame(ctx: FrameCtx) {
-  if (exporting || !requests.size || !ready() || camera.mode !== "fpv") return;
+  if (
+    observerOnly ||
+    exporting ||
+    !requests.size ||
+    !ready() ||
+    camera.mode !== "fpv"
+  )
+    return;
   const request = requests.values().next().value!;
   if (!config.vehicle_ids.includes(request.vehicle_id)) return;
   exporting = true;
@@ -240,7 +259,7 @@ export async function installHarnessBridge() {
   history.replaceState(
     null,
     "",
-    `/sandbox/${config.sid}?harness_bridge=1&chrome=0`,
+    `/sandbox/${config.sid}?harness_bridge=1&chrome=0${observerOnly ? "&harness_view=third" : ""}`,
   );
   sessionStorage.setItem(
     STORAGE_KEY,

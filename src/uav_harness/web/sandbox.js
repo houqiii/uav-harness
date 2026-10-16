@@ -25,8 +25,8 @@ function render() {
   $("sandbox-seed").disabled = busy || state.state === "connecting";
   const evaluation = state.evaluation;
   $("sandbox-evaluation").textContent = evaluation
-    ? `实测评估（不发送给 VLM）：起始 ${evaluation.initial_distance_m.toFixed(1)} m · 当前三维距离 ${evaluation.current_slant_distance_m.toFixed(1)} m · 实飞路径 ${evaluation.flown_path_m.toFixed(1)} m · ${evaluation.passed ? "验收通过：50 米内悬停" : evaluation.initial_distance_m < 300 ? "本轮起点不足 300 米，请重置远距场景" : "尚未通过远距任务验收"}`
-    : "远距任务：300 米以外起步，由 VLM 自主规划到人物三维距离 50 米以内悬停。评测真值不发送给 VLM。";
+    ? `实测评估（不发送给 VLM）：起始 ${evaluation.initial_distance_m.toFixed(1)} m · 当前三维距离 ${evaluation.current_slant_distance_m.toFixed(1)} m · 实飞路径 ${evaluation.flown_path_m.toFixed(1)} m · ${evaluation.passed ? "验收通过：50 米内悬停" : evaluation.initial_distance_m < 180 || evaluation.initial_distance_m > 230 ? "请重置为约 200 米场景" : "尚未通过远距任务验收"}`
+    : "远距任务：约 200 米起步，由 VLM 自主规划到人物三维距离 50 米以内悬停。评测真值不发送给 VLM。";
   $("sandbox-error").hidden = !state.error && state.enabled && state.web_ready;
   $("sandbox-error").textContent =
     state.error ||
@@ -50,8 +50,11 @@ function render() {
     frameSession = state.sid;
     $("sandbox-world").src =
       `/world/${encodeURIComponent(state.world_id)}?harness_bridge=1&chrome=0`;
+    $("sandbox-third").src =
+      `/world/${encodeURIComponent(state.world_id)}?harness_bridge=1&chrome=0&harness_view=third`;
   } else if (!ready && frameSession) {
     $("sandbox-world").src = "about:blank";
+    $("sandbox-third").src = "about:blank";
     frameSession = null;
   }
   $("sandbox-native-link").href =
@@ -79,6 +82,34 @@ async function poll() {
   }
 }
 export function initSandbox() {
+  const slots = [
+    [document.querySelector(".demo-composer"), $("flight-intent")],
+    [$("sandbox-viewport"), $("flight-fpv")],
+    [document.querySelector(".demo-telemetry"), $("flight-telemetry")],
+    [document.querySelector(".demo-controls"), $("flight-controls")],
+    [document.querySelector(".brain-decision-panel"), $("flight-reasoning")],
+  ].map(([node, destination]) => {
+    const anchor = document.createComment("workspace-slot");
+    node.before(anchor);
+    return { node, destination, anchor };
+  });
+  function layout() {
+    const active = inSandbox();
+    document.body.classList.toggle("sandbox-focus", active);
+    $("sandbox-workspace").hidden = !active;
+    slots.forEach(({ node, destination, anchor }) => {
+      if (active) destination.append(node);
+      else anchor.after(node);
+    });
+  }
+  layout();
+  window.addEventListener("hashchange", layout);
+  new ResizeObserver(([entry]) => {
+    $("sandbox-third-viewport").style.setProperty(
+      "--sandbox-render-scale",
+      String(entry.contentRect.width / 1280),
+    );
+  }).observe($("sandbox-third-viewport"));
   new ResizeObserver(([entry]) => {
     $("sandbox-viewport").style.setProperty(
       "--sandbox-render-scale",

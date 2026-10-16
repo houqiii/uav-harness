@@ -51,7 +51,7 @@
             style="width: 90px"
           />
           <button id="sandbox-reset" class="button secondary" disabled>
-            重置远距场景
+            重置 200 米场景
           </button>
           <button id="sandbox-connect" class="button primary">
             创建独立沙盒</button
@@ -85,9 +85,33 @@
         >
       </div>
       <p id="sandbox-evaluation" class="helper">
-        远距任务：300 米以外起步，由 VLM 自主移动并下降到人物三维距离 50
+        远距任务：约 200 米起步，由 VLM 自主移动并下降到人物三维距离 50
         米内悬停。评测真值不发送给 VLM。
       </p>
+    </section>
+    <section id="sandbox-workspace" hidden>
+      <div id="flight-intent"></div>
+      <div class="flight-triptych">
+        <section class="panel flight-view">
+          <div class="section-head">
+            <h2>01 · 云台第一视角</h2>
+            <span class="helper">实时画面 · VLM 图像来源</span>
+          </div>
+          <div id="flight-fpv"></div>
+          <div id="flight-telemetry"></div>
+        </section>
+        <section class="panel flight-view">
+          <div class="section-head">
+            <h2>02 · 第三人称跟随</h2>
+            <span class="helper">实际仿真位置 · 仅供观察</span>
+          </div>
+          <div id="sandbox-third-viewport">
+            <iframe id="sandbox-third" title="无人机第三人称跟随视角"></iframe>
+          </div>
+          <div id="flight-controls"></div>
+        </section>
+        <div id="flight-reasoning"></div>
+      </div>
     </section>
     <main id="demo-console" class="demo-grid">
       <div class="demo-left">
@@ -182,7 +206,7 @@
           aria-labelledby="brain-decision-title"
         >
           <div class="section-head">
-            <h2 id="brain-decision-title">VLM 规划与执行反馈</h2>
+            <h2 id="brain-decision-title">03 · VLM 观测与决策依据</h2>
             <span id="brain-round" class="helper">第 0 轮</span>
           </div>
           <p id="brain-task" class="helper">
@@ -192,6 +216,7 @@
             每轮使用新图像、拍摄姿态、遥测和上一次动作结果。
           </p>
           <ol id="brain-task-plan" class="brain-task-plan"></ol>
+          <div id="brain-round-history" class="round-history"></div>
           <div class="brain-tool">
             <span>本轮动作提议</span><code id="brain-action">—</code>
           </div>

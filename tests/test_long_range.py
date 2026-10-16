@@ -96,11 +96,11 @@ def test_evaluation_uses_actual_motion_and_does_not_publish_target_coordinates()
             source="test",
         )
 
-    score = EpisodeEvaluation((330, 0, 0), telemetry(0, 0), 50)
+    score = EpisodeEvaluation((210, 0, 0), telemetry(0, 0), 50)
     assert not score.snapshot("succeeded")["passed"]
-    score.update(telemetry(300, -30))
+    score.update(telemetry(180, -30))
     result = score.snapshot("succeeded")
-    assert result["passed"] and result["flown_path_m"] > 300
+    assert result["passed"] and result["flown_path_m"] > 180
     assert result["current_slant_distance_m"] == pytest.approx(math.sqrt(1800))
     assert "target" not in json.dumps(result) and "position" not in json.dumps(result)
 
@@ -115,7 +115,7 @@ def test_seed_changes_scene_but_never_inserts_a_preplanned_route(tmp_path):
     for seed in range(10, 25):
         scene = search_scene(tmp_path, seed)
         point = scene["targets"][0]["pos"]
-        assert math.dist(point[:2], [-31.9, -337.1]) >= 300
+        assert 180 <= math.dist(point[:2], [-31.9, -337.1]) <= 230
         assert not scene["tasks"]
         positions.add(tuple(point[:2]))
     assert len(positions) > 1

@@ -498,6 +498,24 @@ function render() {
     : "—";
   const seq = s?.events.at(-1)?.sequence || 0;
   if (seq !== eventSequence) {
+    $("brain-round-history").replaceChildren(
+      ...(s?.events || [])
+        .filter((e) => e.kind === "decision")
+        .slice()
+        .reverse()
+        .map((e) => {
+          const item = document.createElement("details");
+          const title = document.createElement("summary");
+          title.textContent = `第 ${e.round || "—"} 轮 · ${actions[e.action?.action] || e.action?.action} · 帧 ${e.observation_id?.slice(0, 7)}`;
+          item.append(title, element("p", "", e.message));
+          (e.plan || []).forEach((line) =>
+            item.append(element("p", "helper", line)),
+          );
+          return item;
+        }),
+    );
+  }
+  if (seq !== eventSequence) {
     eventSequence = seq;
     $("demo-events").replaceChildren(
       ...(s?.events || [])

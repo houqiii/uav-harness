@@ -10,11 +10,11 @@ def search_scene(source_dir, seed=17):
     )
     # Independently selected scenario placement; never sent to the VLM.
     roads = [
-        [-350.0, -300.0, None],
-        [0.0, -10.0, None],
-        [280.0, -300.0, None],
-        [320.0, -300.0, None],
-        [300.0, -300.0, None],
+        [-230.0, -300.0, None],
+        [0.0, -140.0, None],
+        [160.0, -300.0, None],
+        [180.0, -300.0, None],
+        [170.0, -300.0, None],
     ]
     spawn = random.Random(seed).choice(roads)
     return {
@@ -37,7 +37,7 @@ def search_scene(source_dir, seed=17):
             }
         ],
         "tasks": [],
-        # Road-centre positions: native DSM is below 0.02 m within a 4 m neighborhood.
+        # Candidate road positions roughly 200 m from the launch nest.
         "targets": [
             {
                 "id": "subject-a",
