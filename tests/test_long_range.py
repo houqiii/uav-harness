@@ -116,6 +116,9 @@ def test_seed_changes_scene_but_never_inserts_a_preplanned_route(tmp_path):
         scene = search_scene(tmp_path, seed)
         point = scene["targets"][0]["pos"]
         assert 140 <= math.dist(point[:2], [-31.9, -337.1]) <= 165
+        # Initial yaw is east (90 degrees); keep every seed well outside that view.
+        bearing = math.degrees(math.atan2(point[0] + 31.9, point[1] + 337.1)) % 360
+        assert abs((bearing - 90 + 180) % 360 - 180) > 60
         assert not scene["tasks"]
         positions.add(tuple(point[:2]))
     assert len(positions) > 1
@@ -138,3 +141,19 @@ async def test_invalid_vlm_json_recovers_with_fresh_observation_without_dispatch
     await m.run()
     assert len(set(seen)) == 3 and m.status == "needs_operator"
     assert not any(x["action"] in ("move", "takeoff") for x in port.executions)
+
+
+async def test_confirmed_target_can_be_approached_before_any_scan_coverage():
+    port = SimulatedPort("v", seed=1)
+    port.position = [0, 0, -50]
+    obs = await port.observe()
+    m = Mission(MissionRequest(query="找到后接近", vehicle_id="v"), port, None, Policy())
+    m.resolved_objective = "approach"
+    m.target = {
+        "visible": True, "confirmed_observations": 2,
+        "geometry": {"position_ned": [100, 0, 0], "horizontal_distance_m": 100, "uncertainty_m": 2},
+    }
+    assert not m.scanned
+    command = m.ground_command(obs, proposal(obs, {"action": "approach", "step_m": 10}))
+    assert command["action"] == "move"
+    assert command["offset_ned"] == pytest.approx((10, 0, 0))

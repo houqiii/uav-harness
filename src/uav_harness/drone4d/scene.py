@@ -8,13 +8,14 @@ def search_scene(source_dir, seed=17):
     root = json.loads(
         (source_dir / "scenarios/sandbox/synthcity/t6_manual.json").read_text()
     )
-    # Independently selected scenario placement; never sent to the VLM.
+    # Independently selected placement, outside the initial east-facing view.
+    # Coordinates remain scene inputs and are never sent to the VLM.
     roads = [
         [-180.0, -300.0, None],
         [0.0, -190.0, None],
-        [110.0, -300.0, None],
-        [120.0, -300.0, None],
-        [115.0, -300.0, None],
+        [-175.0, -300.0, None],
+        [-185.0, -300.0, None],
+        [-10.0, -190.0, None],
     ]
     spawn = random.Random(seed).choice(roads)
     return {

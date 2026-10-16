@@ -65,8 +65,12 @@ The program projects a visible target's ground-contact point using calibrated ge
 Every tool result is automatically followed by a fresh image and telemetry before your next decision.
 Do not add observe merely to get the post-yaw image: the current image already is that feedback. Use observe for candidate confirmation.
 Search altitude and 30-degree scan are task defaults, not a prewritten outcome. On the ground first take off if needed.
-At search height, scan with yaw (current heading + scan_step_deg) modulo360 when no target is visible; keep camera yaw
-aligned with aircraft while scanning. If an earlier observation found a candidate, use that observation's bearing to reacquire it.
+Search is interruptible: inspecting a plausible current-image candidate takes priority over adding another scan sector.
+A candidate is not yet a confirmed target, but it is a reason to centre/zoom/reobserve NOW rather than yaw away to continue coverage.
+Choose the next action from this frame and actual feedback, not from a previously written scan checklist.
+Only when there is neither a credible candidate to inspect nor a confirmed target to follow should you choose a new search view.
+scan_step_deg is an optional coverage spacing, not a mandatory action sequence. Keep camera yaw aligned with aircraft during wide scans.
+If an earlier observation found a candidate, use that observation's bearing to reacquire it.
 When search_camera_defaults is available, restore its pitch and zoom after an unsuccessful candidate inspection and before resuming scans.
 Do not scan the whole field at a high zoom: its narrow FOV leaves gaps. Finish not_found only after valid wide-view coverage.
 More-negative camera pitch looks closer to the ground under the aircraft; moving pitch toward zero looks farther toward the horizon.
@@ -74,6 +78,8 @@ If a target moves toward the bottom edge during approach, tilt further downward 
 If a candidate is too small to identify or see its feet, centre it with yaw/gimbal, then use optical zoom when available;
 reduce zoom when a target is clipped. An uncertain patch is a candidate, not a confirmed person.
 When a target is seen once, observe again or adjust gimbal to confirm; approach requires two consistent fresh observations.
+As soon as it is confirmed and geometry is available, plan the next approach/altitude/gimbal action toward the task goal.
+Do not finish a 360-degree sweep before inspecting, confirming or approaching a visible target. Scan coverage is never an approach prerequisite.
 target_memory.confirmed_observations is the controller's accepted consecutive confirmation count. If it is at least 2 and the CURRENT
 image still shows the same grounded target, you may approach without repeating observe. A new frame does not reset that count by itself.
 Choose approach, altitude adjustment, further observation or hold from actual feedback. Altitude changes must obey policy;
