@@ -84,3 +84,28 @@ legacy boxes retain the normalized convention; ambiguous or out-of-bounds
 boxes are rejected, never guessed or clamped. Unit tests cover conversion,
 legacy rejection and bounds enforcement. This verifies the format fix,
 not task completion or correctness of the proposed camera motion.
+
+### 2026-10-16: candidate inspection before further pitch/search
+
+Inspected cancelled mission `d339e20e33a04bcb92b1210e431bc3c6`.
+Rounds 8 and 9 described a tiny colored candidate but returned `target=null`
+and commanded pitch -25 then -35 degrees. Round 10 lost the candidate and
+resumed yaw scanning. Missing structured detections also prevented candidate
+bearing memory from being populated.
+
+Updated the planner instructions to record tentative detections, inspect a
+localized task-relevant color patch before dismissing it as noise, prefer
+modest zoom that preserves the candidate in frame, and avoid using downward
+pitch as a substitute for magnification. A centring correction remains allowed
+when zoom would crop the candidate. A post-zoom image counts toward existing
+confirmation requirements; approach still requires current grounded evidence.
+No scene coordinates or scripted motion were added to model context.
+
+Three isolated live Qwen calls used saved original images and reconstructed
+prior action/result context, without dispatching any flight action. The initial
+prompt revision selected zoom 2x with a tentative bbox on round 9, but still
+dismissed the round-8 patch. After clarifying that an unresolved relevant color
+patch must first be inspected, replay of round 8 selected zoom 2x and recorded
+its tentative bbox. This tests candidate inspection decisions, not a completed
+closed-loop approach. The revised prompt does not guarantee all future model
+outputs; geometric approach guards remain in force.
