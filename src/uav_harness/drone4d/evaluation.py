@@ -33,7 +33,7 @@ class EpisodeEvaluation:
             "monitor_radius_m": self.radius,
             "hovering": hovering,
             "passed": status == "succeeded"
-            and 180 <= self.initial_distance <= 230
+            and 140 <= self.initial_distance <= 165
             and distance <= self.radius
             and hovering,
         }

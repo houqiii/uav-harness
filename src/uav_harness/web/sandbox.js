@@ -25,8 +25,8 @@ function render() {
   $("sandbox-seed").disabled = busy || state.state === "connecting";
   const evaluation = state.evaluation;
   $("sandbox-evaluation").textContent = evaluation
-    ? `实测评估（不发送给 VLM）：起始 ${evaluation.initial_distance_m.toFixed(1)} m · 当前三维距离 ${evaluation.current_slant_distance_m.toFixed(1)} m · 实飞路径 ${evaluation.flown_path_m.toFixed(1)} m · ${evaluation.passed ? "验收通过：50 米内悬停" : evaluation.initial_distance_m < 180 || evaluation.initial_distance_m > 230 ? "请重置为约 200 米场景" : "尚未通过远距任务验收"}`
-    : "远距任务：约 200 米起步，由 VLM 自主规划到人物三维距离 50 米以内悬停。评测真值不发送给 VLM。";
+    ? `实测评估（不发送给 VLM）：起始 ${evaluation.initial_distance_m.toFixed(1)} m · 当前三维距离 ${evaluation.current_slant_distance_m.toFixed(1)} m · 实飞路径 ${evaluation.flown_path_m.toFixed(1)} m · ${evaluation.passed ? "验收通过：50 米内悬停" : evaluation.initial_distance_m < 140 || evaluation.initial_distance_m > 165 ? "请重置为约 150 米场景" : "尚未通过远距任务验收"}`
+    : "远距任务：约 150 米起步，由 VLM 自主规划到人物三维距离 50 米以内悬停。评测真值不发送给 VLM。";
   $("sandbox-error").hidden = !state.error && state.enabled && state.web_ready;
   $("sandbox-error").textContent =
     state.error ||
