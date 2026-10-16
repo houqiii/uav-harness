@@ -353,3 +353,88 @@ a candidate, but still selected aim_target. That output was not replaced with
 inspect_target and was not presented as autonomous flight success. Tool schema
 descriptions now distinguish pointing, optical zoom and horizontal inspection;
 there are no numerical scene-specific planning suggestions.
+
+## Native closed-loop audit, 2026-10-16
+
+Thinking remains **disabled**. A temporary Qwen3-VL-Plus thinking comparison
+(budget 2048) produced multiple responses exceeding the unchanged 30-second
+observation deadline; it did not establish improved grounding. Cancelled mission:
+`09424ae1867a46e3bfd6832298b62b9d`. This setting was reverted, not shipped.
+
+Two actual adapter problems were isolated during the subsequent native runs:
+
+- `8d6e7c7e3d36449ba2834fc81cab45be`: the planner received camera world pose,
+  intrinsics and aircraft telemetry, but not gimbal actuator travel. It repeatedly
+  commanded world headings outside the current body-relative travel and received
+  generic SDK PARAM_OUT_OF_RANGE. Observations now expose measured relative
+  yaw/pitch and GX40 mount limits (-160..160 yaw, -90..30 pitch). Adapter validation
+  returns the requested relative angle and actual limit before SDK dispatch.
+  These are equipment specifications, not scene-dependent zoom or target rules.
+- `f321f38ca93d46998d979e3fc318a76d` (Qwen3.8-Flash, non-thinking): rounds 16/17/18
+  selected aim_target / zoom(3) / inspect_target(15m), all model-selected. The
+  movement reduced true slant distance from about165m to151m. However, native goto
+  implicitly rotated aircraft heading from135 to283.7 degrees while the gimbal
+  retained relative yaw148.4 degrees. Consequently the camera jumped from283.8
+  to72.4 degrees, losing the target. The old unit test incorrectly assumed that
+  omitting yaw_rad meant preserving yaw. Translation and altitude goto now
+  explicitly retain measured aircraft heading; the regression checks this field.
+  This run was cancelled after diagnosing the unintended camera rotation.
+
+Single-frame, non-thinking comparisons on the same saved native 2x view:
+Qwen3.7-Plus took7.03s and selected another aim with an inaccurate central box;
+Qwen3.8-Flash took6.15s and selected inspect_target(15), with a box nearer the
+actual target. This is a small diagnostic, not proof of model superiority or
+full-mission success. The default model configuration is still Qwen3-VL-Plus;
+comparative server runs use QWEN_VL_MODEL explicitly.
+
+Evidence (images, capture telemetry, decisions, commands and actual results) is
+retained locally in ignored `state/acceptance/<mission_id>/`. Evaluator scene
+truth is recorded only for operator verification and is never model input.
+Before the explicit-heading fix, full suite144passed; after it, focused native
+adapter/long-range suite36passed. Native end-to-end verification follows below.
+
+
+Follow-up comparisons were not successful missions: Qwen3.8-Flash run
+`396a203c579240b1a2bd3d97adb1e791` repeated search and was cancelled;
+Qwen3.7-Plus runs `0f2291c034bf4c9b835d0b271bfcb4bb` (1280px) and
+`283f25c6b9254a999be4c3e5d2a80de3` (1920px) missed the small visible candidate
+and were cancelled. These results do not justify replacing Qwen3-VL-Plus.
+The native capture bridge now preserves up to 1920px of actual canvas detail
+without upscaling, with intrinsics scaled by the same factor.
+
+Planner memory no longer includes completion_evidence_missing,
+confirmed_observations or repeated requires_current_image_confirmation flags.
+It carries the candidate label, observation timestamp/ID, previous visibility,
+measured sighting ray, translation since that sighting, and available historical
+geometry. Completion validation remains in the runner; its missing-proof list
+is not repeatedly presented as a reason to doubt a visible candidate.
+This change neither fabricates detections nor substitutes harness-authored
+motion for model decisions. Target localization, zoom and inspection distance
+remain model-selected. Focused brain/long-range/planner tests: 45 passed.
+
+
+Original Qwen3-VL-Plus, thinking disabled, cleaned candidate memory:
+`8b27141a6d794aa3a5cffecba9fe25c8`. It located the candidate, corrected an
+actuator travel issue with aircraft yaw, then chose aim_target (round18),
+zoom2.5 (19), zoom4 (20), inspect_target15m (21). No action was replaced by
+harness rules. This establishes a candidate-to-inspection sequence, NOT a
+completed 50m mission. One plan string exceeded the existing 200-character
+schema limit; a search gimbal command also mixed relative and world yaw.
+The gimbal action schema now explicitly labels yaw as absolute world heading.
+
+Native verification disproved the first explicit-yaw fix for safe_transit:
+after round21 the body still turned135→283.7 degrees and camera284→72.7.
+The mission was paused to avoid spending further inference on a displaced view.
+Inspection of Drone4D python/awr/sim/mission/tracker.py GotoProvider.start shows
+that M10 non-direct route planning does not forward yaw_rad. The adapter now
+uses direct goto for bounded visual steps, retaining native path/fence admission
+and rejecting blocked paths rather than silently substituting a different route.
+Completion also checks heading for translation/altitude, not merely position.
+
+An explicitly operator-selected 2m diagnostic (not VLM-autonomous) then measured
+body heading135.001227→135.001336 degrees and NED displacement
+[0.465,-1.937,0.0]m with route=direct. Evidence is in
+state/acceptance/direct-heading-diagnostic.json. The new route is physically
+verified for this short step. A complete autonomous ≤50m+hover mission has
+NOT yet passed. Full suite146passed before this final route correction;
+focused suites are rerun after it.

@@ -187,7 +187,8 @@ async function exportFrame(ctx: FrameCtx) {
     const be = vp.be!;
     const canvas = be.renderer.domElement;
     const output = document.createElement("canvas");
-    const scale = Math.min(1, 1280 / canvas.width);
+    // Preserve native 1080p detail; never upscale a lower-resolution framebuffer.
+    const scale = Math.min(1, 1920 / canvas.width);
     output.width = Math.round(canvas.width * scale);
     output.height = Math.round(canvas.height * scale);
     const gc = output.getContext("2d")!;

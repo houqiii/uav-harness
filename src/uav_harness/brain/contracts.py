@@ -80,12 +80,27 @@ class SearchCameraDefaults(Contract):
     zoom_x: float = Field(ge=1, le=5)
 
 
+class GimbalControl(Contract):
+    """Measured body-relative pointing and device limits, in degrees.
+
+    Yaw is positive clockwise from the aircraft nose; pitch is positive up.
+    These describe the actuator, not a target-dependent planning restriction.
+    """
+
+    yaw_deg: float
+    pitch_deg: float
+    yaw_limits_deg: tuple[float, float]
+    pitch_limits_deg: tuple[float, float]
+    source: str
+
+
 class Observation(Contract):
     observation_id: Id
     vehicle_id: Id
     captured_at: float
     telemetry: Telemetry
     camera: Camera
+    gimbal_control: GimbalControl | None = None
     image: bytes = Field(repr=False, exclude=True)
     capabilities: list[str]
     source: Literal["geometric_simulation", "http_camera", "drone4d_native"]
@@ -128,8 +143,13 @@ class Yaw(Contract):
 
 class Gimbal(Contract):
     action: Literal["gimbal"]
-    pitch_deg: float = Field(ge=-85, le=-5)
-    yaw_deg: float | None = Field(default=None, ge=0, lt=360)
+    pitch_deg: float = Field(
+        ge=-85, le=-5, description="Body-relative pitch in degrees; negative points down."
+    )
+    yaw_deg: float | None = Field(
+        default=None, ge=0, lt=360,
+        description="Absolute world heading: north=0, east=90. NOT body-relative yaw or an angular increment. Null retains current gimbal yaw.",
+    )
 
 
 class AimTarget(Contract):

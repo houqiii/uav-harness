@@ -160,8 +160,9 @@ async def test_motion_history_cannot_supply_a_stale_image_box_as_current_evidenc
     assert memory["camera_aim_hint"]["pitch_deg"] == pytest.approx(
         -math.degrees(math.atan2(50, 20))
     )
-    assert memory["camera_aim_hint"]["requires_current_image_confirmation"]
-    assert memory["confirmed_observations"] == 3
+    assert "confirmed_observations" not in memory
+    assert "completion_evidence_missing" not in memory
+    assert "requires_current_image_confirmation" not in serialized
 
 
 async def test_provider_rejects_stale_reference_and_truncated_output(monkeypatch):

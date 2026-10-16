@@ -236,7 +236,9 @@ async def test_candidate_association_survives_pose_jitter_but_requires_grounding
             current, proposal(current, {"action": "approach", "step_m": 10})
         )
     _, memory = planning_memory(current, [], m.target)
-    assert memory["completion_evidence_missing"]
+    assert "completion_evidence_missing" not in memory
+    assert "confirmed_observations" not in memory
+    assert memory["visible_in_previous_observation"]
     assert memory["last_sighting_direction"]["directional_only"]
     assert "bbox" not in memory
     assert "historical_geometry" not in memory
@@ -245,10 +247,8 @@ async def test_candidate_association_survives_pose_jitter_but_requires_grounding
     lost = current.model_copy(update={"observation_id": "lost"})
     m.remember_target(lost, proposal(lost, {"action": "observe"}))
     _, memory = planning_memory(lost, [], m.target)
-    assert (
-        "target_not_visible_in_previous_observation"
-        in memory["completion_evidence_missing"]
-    )
+    assert not memory["visible_in_previous_observation"]
+    assert memory["last_sighting_direction"]["heading_deg"] is not None
     current, decision = frame(5, *samples[-1])
     m.remember_target(current, decision)
     assert m.target["confirmed_observations"] == 1
@@ -442,16 +442,21 @@ async def test_default_search_cannot_translate_even_if_model_requests_exploratio
     assert active_perception_feedback(obs, m.policy, [])["search_position_locked"]
 
 
-async def test_candidate_motion_keeps_camera_world_bearing_through_native_enu_adapter():
+@pytest.mark.parametrize(
+    "body_heading,native_yaw", [(90, 0), (135, -0.7853981634), (350, 1.745329252)]
+)
+async def test_candidate_motion_keeps_camera_world_bearing_through_native_enu_adapter(
+    body_heading, native_yaw
+):
     from uav_harness.brain.contracts import Detection
     from uav_harness.drone4d.port import Drone4DPort
 
-    # Aircraft faces east; its camera sees a candidate west-northwest. The
+    # Aircraft and camera point in different directions. The
     # translation must follow that visual ray, never the aircraft's forward axis.
     sim = SimulatedPort("v", seed=1)
     sim.position = [-337, -32, -50]
     obs = await sim.observe()
-    obs.telemetry.heading_deg = 90
+    obs.telemetry.heading_deg = body_heading
     obs.telemetry.home_north_m = -337
     obs.telemetry.home_east_m = -32
     obs.camera = obs.camera.model_copy(
@@ -503,4 +508,7 @@ async def test_candidate_motion_keeps_camera_world_bearing_through_native_enu_ad
     await native.execute(command)
     assert sent[0][0] == "goto"
     assert sent[0][1]["pos"] == pytest.approx([-41.70295726, -334.58078104, 50])
-    assert "yaw_rad" not in sent[0][1]  # No unrelated yaw back to the search heading.
+    # Explicitly hold the current body heading: omission makes native goto turn
+    # toward the travel direction, rotating a body-fixed camera away from target.
+    assert sent[0][1]["yaw_rad"] == pytest.approx(native_yaw)
+    assert sent[0][1]["route"] == "direct"

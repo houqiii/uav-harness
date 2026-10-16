@@ -53,12 +53,16 @@ observation_id 必须匹配当前帧。accepted_task_goal 是最终任务类型�
 
 视觉任务规划原则：
 - 未发现线索时保持位置，通过机身或云台转向搜索。搜索间隔不是必须走完的扫描清单。
+  observation.scan_headings_deg 记录已经拍摄观测过的世界方位，不是待执行的扫描清单；
+  无候选时优先观察尚未覆盖的方位。只有新的观测需求才能说明重复观察的价值。
 - 发现符合用户描述的可定位线索时输出疑似 target 和当前 bbox，暂停扫描，检查该候选。
   尺寸小、身份不确定是检查线索的原因；已有可定位的颜色/形状线索时，不要仅因无法确认身份就丢弃它。
 - 候选偏离中央时用 aim_target 将当前观测射线对准光轴；随后根据新帧选择 zoom 查看细节。
   上次云台角度到位不等于图像目标已经居中。倍率由你依据本帧位置、大小和成像需求选择，不追求像素级完美居中。
 - 放大后仍可见候选但细节不足、且用户任务允许接近时，选择 inspect_target 沿本帧候选方向短距离水平接近，再看新帧。
   飞近用于消除身份不确定性，不需要先看清所有细节。不要用反复调整俯仰替代增加目标像素。
+- 持续关注已经发现的候选；缺少身份或接地细节不等于候选消失，也不要求重新从搜索开始。
+  target_memory 是历史观测事实。结合本帧更新它；完成任务所需的距离证据不应成为开始接近观察的前提。
 - 确认目标后根据新画面和距离证据选择接近、必要的高度调整或悬停。身份确认不等于已经到达。
 - 目标丢失时优先恢复最近观测方向的视场，缩小倍率重新获取；不要根据旧框盲飞或立即跳转到无关扫描方向。
   当前图像明确排除候选后再恢复搜索。
@@ -68,6 +72,10 @@ observation_id 必须匹配当前帧。accepted_task_goal 是最终任务类型�
 - bbox 只使用 normalized_1000：横纵分别以图像宽高为1000，左上[0,0]、中心[500,500]、右下[1000,1000]。
   输出 [x_min,y_min,x_max,y_max]，bbox_coordinate_space 固定为 normalized_1000；禁止输出像素或复用旧框。
 - aim_target 根据当前 bbox、相机内参和拍摄姿态计算世界观测方向，再转换为设备角度。gimbal 的 pitch_deg 是机体相对角。
+- camera 是拍摄时的世界姿态；gimbal_control 是机体相对姿态及真实设备行程。
+  图像朝向是 camera.yaw_deg，不是机头 telemetry.heading_deg；二者可以相差很大。
+  gimbal.yaw_deg 是世界航向，必须结合 telemetry.heading_deg 换算相对偏航并检查行程。
+  云台不能无限转一圈；超出行程的方向可先用 yaw 原地转动机身，再根据新画面调整云台。不要反复试探已越界的角度。
 - inspect_target/approach 沿当前视觉目标的世界方位移动，与机头朝向不同也不需要先回到初始航向。
   inspect_target 用于有界近距离复查；approach 需要当前可见目标与接地距离几何。使用范围由 policy 和能力契约决定。
 - ground_contact_visible 仅表示实际可见的地面接触，不能为了获取运动权限而编造。视觉变大不能证明已到达。
@@ -111,23 +119,13 @@ def planning_memory(obs, history, target):
                 "label",
                 "last_seen_at",
                 "observation_id",
-                "confirmed_observations",
             )
             if k in target
         }
-        blockers = []
-        if not target.get("visible"):
-            blockers.append("target_not_visible_in_previous_observation")
-        if target.get("confirmed_observations", 0) < 2:
-            blockers.append("needs_second_consistent_fresh_observation")
-        if not target.get("geometry"):
-            blockers.append(
-                target.get("grounding_error") or "ground_geometry_unavailable"
-            )
-        memory["completion_evidence_missing"] = blockers
-        memory["confirmation_meaning"] = (
-            "historical spatial association only, not identity confidence or a movement gate; use current visible candidate for inspect_target"
-        )
+        # Completion bookkeeping belongs to finish validation, not perception.
+        # Repeating missing-proof warnings here made a usable candidate sound
+        # invalid even when inspect_target could legitimately gather detail.
+        memory["visible_in_previous_observation"] = bool(target.get("visible"))
         ray = target.get("bearing_ray_ned")
         if ray:
             origin = obs.camera.position_ned or obs.telemetry.position_ned
@@ -139,9 +137,7 @@ def planning_memory(obs, history, target):
                 ),
                 "directional_only": True,
                 "translation_since_sighting_m": moved,
-                "valid_as_current_aim": moved < 0.5,
                 "age_s": max(0, obs.captured_at - target["last_seen_at"]),
-                "requires_current_image_confirmation": True,
             }
         geometry = target.get("geometry")
         if geometry:
@@ -152,7 +148,6 @@ def planning_memory(obs, history, target):
                 "heading_deg": math.degrees(math.atan2(e, n)) % 360,
                 "pitch_deg": -math.degrees(math.atan2(d, math.hypot(n, e))),
                 "current_horizontal_range_from_memory_m": math.hypot(n, e),
-                "requires_current_image_confirmation": True,
             }
     return actions, memory
 

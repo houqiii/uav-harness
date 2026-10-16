@@ -5,7 +5,7 @@ import json
 import httpx
 import pytest
 
-from uav_harness.brain.contracts import Policy
+from uav_harness.brain.contracts import GimbalControl, Policy
 from uav_harness.brain.provider import QwenPlanner, parse_decision, response_schema
 from uav_harness.brain.simulation import SimulatedPort
 from test_brain import decision
@@ -30,6 +30,13 @@ async def view():
 async def test_one_frame_produces_one_unmodified_model_decision(monkeypatch, action):
     monkeypatch.setenv("DASHSCOPE_API_KEY", "test-key")
     obs = await view()
+    obs.gimbal_control = GimbalControl(
+        yaw_deg=130,
+        pitch_deg=-15,
+        yaw_limits_deg=(-160, 160),
+        pitch_limits_deg=(-90, 30),
+        source="device_spec_and_telemetry",
+    )
     requests = []
     # Even repeated camera actions remain the VLM's choice, visible in history.
     history = [
@@ -41,7 +48,15 @@ async def test_one_frame_produces_one_unmodified_model_decision(monkeypatch, act
 
     def reply(request):
         body = json.loads(request.content)
+        assert body["enable_thinking"] is False
         context = json.loads(body["messages"][1]["content"][0]["text"])
+        assert context["observation"][
+            "gimbal_control"
+        ] == obs.gimbal_control.model_dump(mode="json")
+        assert context["observation"]["camera"] == obs.camera.model_dump(mode="json")
+        assert context["observation"]["telemetry"] == obs.telemetry.model_dump(
+            mode="json"
+        )
         requests.append(context)
         d = decision(obs, action, {"label": "候选", "bbox": [507, 490, 517, 510]})
         raw = d.model_dump()

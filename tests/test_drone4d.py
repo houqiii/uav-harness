@@ -361,7 +361,7 @@ async def test_cancel_during_spoolup_sends_hover_and_waits_for_hold():
     assert result["completion_scope"] == "drone4d_observed_hover"
 
 
-async def test_yaw_uses_direct_position_hold_while_translation_keeps_path_admission():
+async def test_visual_steps_use_native_direct_goto_with_explicit_heading():
     from types import SimpleNamespace
     from uav_harness.drone4d.port import Drone4DPort, telemetry_from_state
 
@@ -393,7 +393,8 @@ async def test_yaw_uses_direct_position_hold_while_translation_keeps_path_admiss
     assert commands[-1][1]["route"] == "direct"
     assert commands[-1][1]["yaw_rad"] == pytest.approx(-0.5235987756)
     await p.execute({"action": "move", "offset_ned": [3, 4, 0]})
-    assert commands[-1][1]["route"] == "safe_transit"
+    assert commands[-1][1]["route"] == "direct"
+    assert commands[-1][1]["yaw_rad"] == pytest.approx(0)
 
 
 def test_optional_battery_extension_may_be_null_during_startup():
@@ -686,3 +687,30 @@ async def test_large_yaw_settles_each_segment_without_changing_altitude(start, e
     result = await p.execute({"action": "yaw", "heading_deg": end})
     assert len(segments) == math.ceil(abs((end - start + 180) % 360 - 180) / 60)
     assert result["status"] == "succeeded"
+
+
+async def test_native_gimbal_limits_are_exposed_and_reject_before_sdk_dispatch():
+    import math
+    from types import SimpleNamespace
+    from uav_harness.drone4d.port import Drone4DPort, telemetry_from_state
+
+    p = Drone4DPort(SimpleNamespace(config=SimpleNamespace(speed_mps=3)), "v")
+    p.latest_sensors = {
+        "sensors": [{"type": "eo_zoom", "spec_ref": "eo_gx40@1.0.0"}],
+        "payload": {"gimbal": {"yaw_rad": math.radians(-100), "pitch_rad": -0.2}},
+    }
+
+    async def refresh():
+        return telemetry_from_state(wire_state())  # nose points east, 90 degrees
+
+    async def command(*args, **kwargs):
+        pytest.fail("out-of-range command must not reach SDK")
+
+    p.refresh, p.command = refresh, command
+    controls = p.gimbal_control()
+    assert controls["yaw_deg"] == pytest.approx(100)
+    assert controls["yaw_limits_deg"] == [-160, 160]
+    with pytest.raises(HarnessError, match="body-relative yaw.*device limits"):
+        await p.execute({"action": "gimbal", "pitch_deg": -15, "yaw_deg": 270})
+    p.latest_sensors["sensors"] = []
+    assert p.gimbal_control() is None

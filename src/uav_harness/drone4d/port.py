@@ -149,6 +149,20 @@ class Drone4DPort:
             for s in (self.latest_sensors or {}).get("sensors", [])
         )
 
+    def gimbal_control(self):
+        # Native GX40 mount specification (p600/awr_q9), independent of scene.
+        # Unknown payloads must not inherit these limits.
+        if not self.zoom_available():
+            return None
+        g = self.latest_sensors["payload"]["gimbal"]
+        return {
+            "yaw_deg": -math.degrees(g["yaw_rad"]),
+            "pitch_deg": math.degrees(g["pitch_rad"]),
+            "yaw_limits_deg": [-160, 160],
+            "pitch_limits_deg": [-90, 30],
+            "source": "drone4d_gx40_mount_spec_and_measured_angles",
+        }
+
     async def observe(self):
         await self.refresh()
         frame = await self.service.capture.capture(self.vehicle_id)
@@ -186,6 +200,7 @@ class Drone4DPort:
             captured_at=frame["captured_at"],
             telemetry=t,
             camera=self.last_camera,
+            gimbal_control=self.gimbal_control(),
             image=frame["image"],
             source="drone4d_native",
             search_camera_defaults={
@@ -328,7 +343,15 @@ class Drone4DPort:
                     "pos": [target[1], target[0], -target[2]],
                     "speed_mps": self.service.config.speed_mps,
                     "tol_m": 0.5,
-                    "route": "direct" if action == "yaw" else "safe_transit",
+                    # Bounded visual steps use native direct goto, which keeps
+                    # explicit yaw and still runs native path/geofence checks.
+                    # M10 safe_transit ignores yaw_rad and turns the body-fixed
+                    # camera toward the route. Never silently substitute it.
+                    "route": "direct",
+                    "yaw_rad": math.atan2(
+                        math.sin(math.radians(90 - t.heading_deg)),
+                        math.cos(math.radians(90 - t.heading_deg)),
+                    ),
                 }
                 # Native FastGuard treats an instantaneous yaw error >90 degrees
                 # as ELAND. Implement one planner yaw as settled <=60-degree
@@ -349,10 +372,7 @@ class Drone4DPort:
                         lambda s: (
                             math.dist(s.position_ned, target) < 0.8
                             and math.sqrt(sum(v * v for v in s.velocity_ned)) < 0.4
-                            and (
-                                action != "yaw"
-                                or abs((s.heading_deg - heading + 180) % 360 - 180) < 3
-                            )
+                            and abs((s.heading_deg - heading + 180) % 360 - 180) < 3
                         )
                     )
                     if action != "yaw":
@@ -380,10 +400,21 @@ class Drone4DPort:
                         -math.degrees(azimuth),
                         math.degrees(elevation),
                     )
-                    if not -90 <= pitch_command <= 30 or abs(relative) > 150:
-                        raise HarnessError(
-                            "world camera aim outside native gimbal limits"
-                        )
+                limits = self.gimbal_control()
+                if limits and not (
+                    limits["pitch_limits_deg"][0]
+                    <= pitch_command
+                    <= limits["pitch_limits_deg"][1]
+                    and limits["yaw_limits_deg"][0]
+                    <= relative
+                    <= limits["yaw_limits_deg"][1]
+                ):
+                    raise HarnessError(
+                        f"gimbal body-relative yaw {relative:.1f} degrees or pitch "
+                        f"{pitch_command:.1f} degrees exceeds device limits "
+                        f"yaw={limits['yaw_limits_deg']}, pitch={limits['pitch_limits_deg']}; "
+                        "aircraft yaw can change reachable world directions; reobserve after turning"
+                    )
                 receipt = await self.command(
                     "gimbal",
                     mode="angles",
